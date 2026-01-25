@@ -8,7 +8,11 @@ import * as fs from 'node:fs/promises';
 import * as fsSync from 'node:fs';
 import * as path from 'node:path';
 import { bfsFileSearch } from './bfsFileSearch.js';
-import { getAllGeminiMdFilenames } from '../tools/memoryTool.js';
+import {
+  getAllGeminiMdFilenames,
+  getOverrideFilename,
+  getFallbackFilenames,
+} from '../tools/memoryTool.js';
 import type { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { processImports } from './memoryImportProcessor.js';
 import type { FileFilteringOptions } from '../config/constants.js';
@@ -134,6 +138,71 @@ async function getGeminiMdFilePathsInternal(
   return Array.from(new Set<string>(paths));
 }
 
+/**
+ * Finds context files for a given directory.
+ * Priority order:
+ * 1. Override file (e.g., GEMINI.override.md) - replaces ALL primary files for this directory
+ * 2. Primary files (e.g., GEMINI.md) - ALL matching primary files are loaded
+ * 3. First matching fallback file (e.g., AGENTS.md, CLAUDE.md) - only if NO primary files found
+ *
+ * Returns array of paths to matching files, or empty array if none found.
+ */
+async function findContextFilesInDir(
+  dir: string,
+  primaryFilenames: string[],
+  overrideFilename: string,
+  fallbackFilenames: string[],
+  debugMode: boolean,
+): Promise<string[]> {
+  // Check for override file first - it replaces ALL primary files for this directory
+  const overridePath = path.join(dir, overrideFilename);
+  try {
+    await fs.access(overridePath, fsSync.constants.R_OK);
+    if (debugMode) {
+      logger.debug(`Found override file: ${overridePath}`);
+    }
+    return [overridePath];
+  } catch {
+    // Override not found, continue to primary
+  }
+
+  // Check for ALL primary files
+  const foundPrimaryFiles: string[] = [];
+  for (const primaryFilename of primaryFilenames) {
+    const primaryPath = path.join(dir, primaryFilename);
+    try {
+      await fs.access(primaryPath, fsSync.constants.R_OK);
+      if (debugMode) {
+        logger.debug(`Found primary file: ${primaryPath}`);
+      }
+      foundPrimaryFiles.push(primaryPath);
+    } catch {
+      // Primary not found, continue
+    }
+  }
+
+  // If any primary files found, return them all
+  if (foundPrimaryFiles.length > 0) {
+    return foundPrimaryFiles;
+  }
+
+  // Check for fallback files - only use first matching
+  for (const fallbackFilename of fallbackFilenames) {
+    const fallbackPath = path.join(dir, fallbackFilename);
+    try {
+      await fs.access(fallbackPath, fsSync.constants.R_OK);
+      if (debugMode) {
+        logger.debug(`Found fallback file: ${fallbackPath}`);
+      }
+      return [fallbackPath];
+    } catch {
+      // Fallback not found, continue
+    }
+  }
+
+  return [];
+}
+
 async function getGeminiMdFilePathsInternalForEachDir(
   dir: string,
   userHomePath: string,
@@ -145,84 +214,132 @@ async function getGeminiMdFilePathsInternalForEachDir(
 ): Promise<string[]> {
   const allPaths = new Set<string>();
   const geminiMdFilenames = getAllGeminiMdFilenames();
+  const overrideFilename = getOverrideFilename();
+  const fallbackFilenames = getFallbackFilenames();
 
-  for (const geminiMdFilename of geminiMdFilenames) {
-    const resolvedHome = path.resolve(userHomePath);
-    const globalMemoryPath = path.join(
-      resolvedHome,
-      GEMINI_DIR,
-      geminiMdFilename,
-    );
+  const resolvedHome = path.resolve(userHomePath);
 
-    // This part that finds the global file always runs.
-    try {
-      await fs.access(globalMemoryPath, fsSync.constants.R_OK);
-      allPaths.add(globalMemoryPath);
-      if (debugMode)
-        logger.debug(
-          `Found readable global ${geminiMdFilename}: ${globalMemoryPath}`,
-        );
-    } catch {
-      // It's okay if it's not found.
+  // Check global directory for context files
+  const globalDir = path.join(resolvedHome, GEMINI_DIR);
+  const globalContextFiles = await findContextFilesInDir(
+    globalDir,
+    geminiMdFilenames,
+    overrideFilename,
+    fallbackFilenames,
+    debugMode,
+  );
+  for (const globalContextFile of globalContextFiles) {
+    allPaths.add(globalContextFile);
+    if (debugMode) {
+      logger.debug(`Found global context file: ${globalContextFile}`);
     }
+  }
 
-    // FIX: Only perform the workspace search (upward and downward scans)
-    // if a valid currentWorkingDirectory is provided.
-    if (dir && folderTrust) {
-      const resolvedCwd = path.resolve(dir);
-      if (debugMode)
-        logger.debug(
-          `Searching for ${geminiMdFilename} starting from CWD: ${resolvedCwd}`,
+  // FIX: Only perform the workspace search (upward and downward scans)
+  // if a valid currentWorkingDirectory is provided.
+  if (dir && folderTrust) {
+    const resolvedCwd = path.resolve(dir);
+    if (debugMode)
+      logger.debug(
+        `Searching for context files starting from CWD: ${resolvedCwd}`,
+      );
+
+    const projectRoot = await findProjectRoot(resolvedCwd);
+    if (debugMode)
+      logger.debug(`Determined project root: ${projectRoot ?? 'None'}`);
+
+    const upwardPaths: string[] = [];
+    let currentDir = resolvedCwd;
+    const ultimateStopDir = projectRoot
+      ? path.dirname(projectRoot)
+      : path.dirname(resolvedHome);
+
+    // Track directories we've already processed to avoid duplicates
+    const processedDirs = new Set<string>();
+
+    while (currentDir && currentDir !== path.dirname(currentDir)) {
+      if (currentDir === path.join(resolvedHome, GEMINI_DIR)) {
+        break;
+      }
+
+      if (!processedDirs.has(currentDir)) {
+        processedDirs.add(currentDir);
+
+        const contextFiles = await findContextFilesInDir(
+          currentDir,
+          geminiMdFilenames,
+          overrideFilename,
+          fallbackFilenames,
+          debugMode,
         );
 
-      const projectRoot = await findProjectRoot(resolvedCwd);
-      if (debugMode)
-        logger.debug(`Determined project root: ${projectRoot ?? 'None'}`);
-
-      const upwardPaths: string[] = [];
-      let currentDir = resolvedCwd;
-      const ultimateStopDir = projectRoot
-        ? path.dirname(projectRoot)
-        : path.dirname(resolvedHome);
-
-      while (currentDir && currentDir !== path.dirname(currentDir)) {
-        if (currentDir === path.join(resolvedHome, GEMINI_DIR)) {
-          break;
-        }
-
-        const potentialPath = path.join(currentDir, geminiMdFilename);
-        try {
-          await fs.access(potentialPath, fsSync.constants.R_OK);
-          if (potentialPath !== globalMemoryPath) {
-            upwardPaths.unshift(potentialPath);
+        for (const contextFile of contextFiles) {
+          if (!globalContextFiles.includes(contextFile)) {
+            upwardPaths.unshift(contextFile);
           }
-        } catch {
-          // Not found, continue.
         }
-
-        if (currentDir === ultimateStopDir) {
-          break;
-        }
-
-        currentDir = path.dirname(currentDir);
       }
-      upwardPaths.forEach((p) => allPaths.add(p));
 
-      const mergedOptions: FileFilteringOptions = {
-        ...DEFAULT_MEMORY_FILE_FILTERING_OPTIONS,
-        ...fileFilteringOptions,
-      };
+      if (currentDir === ultimateStopDir) {
+        break;
+      }
 
+      currentDir = path.dirname(currentDir);
+    }
+    upwardPaths.forEach((p) => allPaths.add(p));
+
+    const mergedOptions: FileFilteringOptions = {
+      ...DEFAULT_MEMORY_FILE_FILTERING_OPTIONS,
+      ...fileFilteringOptions,
+    };
+
+    // For downward search, we need to search for all possible filenames
+    // and then filter to get the best one per directory
+    const allFilenames = [
+      ...geminiMdFilenames,
+      overrideFilename,
+      ...fallbackFilenames,
+    ];
+    const uniqueFilenames = [...new Set(allFilenames)];
+
+    // Collect all found files grouped by directory
+    const filesByDir = new Map<string, string[]>();
+
+    for (const filename of uniqueFilenames) {
       const downwardPaths = await bfsFileSearch(resolvedCwd, {
-        fileName: geminiMdFilename,
+        fileName: filename,
         maxDirs,
         debug: debugMode,
         fileService,
         fileFilteringOptions: mergedOptions,
       });
-      downwardPaths.sort();
-      for (const dPath of downwardPaths) {
-        allPaths.add(dPath);
+
+      for (const filePath of downwardPaths) {
+        const fileDir = path.dirname(filePath);
+        if (!filesByDir.has(fileDir)) {
+          filesByDir.set(fileDir, []);
+        }
+        filesByDir.get(fileDir)!.push(filePath);
+      }
+    }
+
+    // For each directory, select the best files based on priority
+    for (const fileDir of filesByDir.keys()) {
+      // Skip directories we already processed in upward search
+      if (processedDirs.has(fileDir)) {
+        continue;
+      }
+
+      const contextFiles = await findContextFilesInDir(
+        fileDir,
+        geminiMdFilenames,
+        overrideFilename,
+        fallbackFilenames,
+        debugMode,
+      );
+
+      for (const contextFile of contextFiles) {
+        allPaths.add(contextFile);
       }
     }
   }
@@ -231,9 +348,7 @@ async function getGeminiMdFilePathsInternalForEachDir(
 
   if (debugMode)
     logger.debug(
-      `Final ordered ${getAllGeminiMdFilenames()} paths to read: ${JSON.stringify(
-        finalPaths,
-      )}`,
+      `Final ordered context file paths to read: ${JSON.stringify(finalPaths)}`,
     );
   return finalPaths;
 }
@@ -333,26 +448,29 @@ export async function loadGlobalMemory(
 ): Promise<MemoryLoadResult> {
   const userHome = homedir();
   const geminiMdFilenames = getAllGeminiMdFilenames();
+  const overrideFilename = getOverrideFilename();
+  const fallbackFilenames = getFallbackFilenames();
+  const globalDir = path.join(userHome, GEMINI_DIR);
 
-  const accessChecks = geminiMdFilenames.map(async (filename) => {
-    const globalPath = path.join(userHome, GEMINI_DIR, filename);
-    try {
-      await fs.access(globalPath, fsSync.constants.R_OK);
-      if (debugMode) {
-        logger.debug(`Found global memory file: ${globalPath}`);
-      }
-      return globalPath;
-    } catch {
-      debugLogger.debug('A global memory file was not found.');
-      return null;
-    }
-  });
-
-  const foundPaths = (await Promise.all(accessChecks)).filter(
-    (p): p is string => p !== null,
+  // Find context files in the global directory
+  const contextFiles = await findContextFilesInDir(
+    globalDir,
+    geminiMdFilenames,
+    overrideFilename,
+    fallbackFilenames,
+    debugMode,
   );
 
-  const contents = await readGeminiMdFiles(foundPaths, debugMode, 'tree');
+  if (contextFiles.length === 0) {
+    debugLogger.debug('No global memory file was found.');
+    return { files: [] };
+  }
+
+  if (debugMode) {
+    logger.debug(`Found global memory files: ${contextFiles.join(', ')}`);
+  }
+
+  const contents = await readGeminiMdFiles(contextFiles, debugMode, 'tree');
 
   return {
     files: contents
@@ -365,10 +483,11 @@ export async function loadGlobalMemory(
 }
 
 /**
- * Traverses upward from startDir to stopDir, finding all GEMINI.md variants.
+ * Traverses upward from startDir to stopDir, finding context files.
  *
- * Files are ordered by directory level (root to leaf), with all filename
- * variants grouped together per directory.
+ * Uses override/fallback priority: override > primary > fallbacks.
+ * Override replaces all primary files; fallback only used if no primary found.
+ * Files are ordered by directory level (root to leaf).
  */
 async function findUpwardGeminiFiles(
   startDir: string,
@@ -379,6 +498,8 @@ async function findUpwardGeminiFiles(
   let currentDir = path.resolve(startDir);
   const resolvedStopDir = path.resolve(stopDir);
   const geminiMdFilenames = getAllGeminiMdFilenames();
+  const overrideFilename = getOverrideFilename();
+  const fallbackFilenames = getFallbackFilenames();
   const globalGeminiDir = path.join(homedir(), GEMINI_DIR);
 
   if (debugMode) {
@@ -392,22 +513,19 @@ async function findUpwardGeminiFiles(
       break;
     }
 
-    // Parallelize checks for all filename variants in the current directory
-    const accessChecks = geminiMdFilenames.map(async (filename) => {
-      const potentialPath = path.join(currentDir, filename);
-      try {
-        await fs.access(potentialPath, fsSync.constants.R_OK);
-        return potentialPath;
-      } catch {
-        return null;
-      }
-    });
-
-    const foundPathsInDir = (await Promise.all(accessChecks)).filter(
-      (p): p is string => p !== null,
+    // Find context files for this directory
+    const contextFiles = await findContextFilesInDir(
+      currentDir,
+      geminiMdFilenames,
+      overrideFilename,
+      fallbackFilenames,
+      debugMode,
     );
 
-    upwardPaths.unshift(...foundPathsInDir);
+    // Add files in reverse order so they end up in correct order after unshift
+    for (let i = contextFiles.length - 1; i >= 0; i--) {
+      upwardPaths.unshift(contextFiles[i]);
+    }
 
     if (
       currentDir === resolvedStopDir ||

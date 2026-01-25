@@ -876,6 +876,31 @@ const SETTINGS_SCHEMA = {
         `,
         showInDialog: true,
       },
+      overrideFilename: {
+        type: 'string',
+        label: 'Override Filename',
+        category: 'Context',
+        requiresRestart: false,
+        default: 'GEMINI.override.md',
+        description: oneLine`
+          The name of the override file that takes precedence over the primary context file in the same directory.
+          Override files are typically gitignored for local customizations.
+        `,
+        showInDialog: false,
+      },
+      fallbackFilenames: {
+        type: 'array',
+        label: 'Fallback Filenames',
+        category: 'Context',
+        requiresRestart: false,
+        default: ['AGENTS.md', 'CLAUDE.md'] as string[],
+        description: oneLine`
+          Fallback filenames to check if the primary context file is not found.
+          Only the first matching fallback per directory is used.
+        `,
+        showInDialog: false,
+        items: { type: 'string' },
+      },
       fileFiltering: {
         type: 'object',
         label: 'File Filtering',

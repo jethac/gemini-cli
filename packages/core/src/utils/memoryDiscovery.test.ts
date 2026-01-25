@@ -17,7 +17,11 @@ import {
 } from './memoryDiscovery.js';
 import {
   setGeminiMdFilename,
+  setOverrideFilename,
+  setFallbackFilenames,
   DEFAULT_CONTEXT_FILENAME,
+  DEFAULT_OVERRIDE_FILENAME,
+  DEFAULT_FALLBACK_FILENAMES,
 } from '../tools/memoryTool.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { GEMINI_DIR } from './paths.js';
@@ -84,6 +88,8 @@ describe('memoryDiscovery', () => {
     vi.unstubAllEnvs();
     // Some tests set this to a different value.
     setGeminiMdFilename(DEFAULT_CONTEXT_FILENAME);
+    setOverrideFilename(DEFAULT_OVERRIDE_FILENAME);
+    setFallbackFilenames(DEFAULT_FALLBACK_FILENAMES);
     // Clean up the temporary directory to prevent resource leaks.
     // Use maxRetries option for robust cleanup without race conditions
     await fsPromises.rm(testRootDir, {
@@ -985,5 +991,360 @@ included directory memory
     expect(mockConfig.setUserMemory).toHaveBeenCalledWith(
       expect.stringContaining('Always be polite.'),
     );
+  });
+
+  describe('override file support', () => {
+    it('should use override file instead of primary when both exist in same directory', async () => {
+      await createTestFile(
+        path.join(cwd, DEFAULT_CONTEXT_FILENAME),
+        'Primary content',
+      );
+      const overrideFile = await createTestFile(
+        path.join(cwd, DEFAULT_OVERRIDE_FILENAME),
+        'Override content',
+      );
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(1);
+      expect(result.filePaths).toEqual([overrideFile]);
+      expect(result.memoryContent).toContain('Override content');
+      expect(result.memoryContent).not.toContain('Primary content');
+    });
+
+    it('should use primary file when override does not exist', async () => {
+      const primaryFile = await createTestFile(
+        path.join(cwd, DEFAULT_CONTEXT_FILENAME),
+        'Primary content',
+      );
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(1);
+      expect(result.filePaths).toEqual([primaryFile]);
+      expect(result.memoryContent).toContain('Primary content');
+    });
+
+    it('should use custom override filename when configured', async () => {
+      setOverrideFilename('CUSTOM.override.md');
+
+      await createTestFile(
+        path.join(cwd, DEFAULT_CONTEXT_FILENAME),
+        'Primary content',
+      );
+      const customOverrideFile = await createTestFile(
+        path.join(cwd, 'CUSTOM.override.md'),
+        'Custom override content',
+      );
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(1);
+      expect(result.filePaths).toEqual([customOverrideFile]);
+      expect(result.memoryContent).toContain('Custom override content');
+    });
+
+    it('should handle override files in hierarchical structure', async () => {
+      // Project root has primary, cwd has override
+      const projectPrimaryFile = await createTestFile(
+        path.join(projectRoot, DEFAULT_CONTEXT_FILENAME),
+        'Project primary content',
+      );
+      const cwdOverrideFile = await createTestFile(
+        path.join(cwd, DEFAULT_OVERRIDE_FILENAME),
+        'CWD override content',
+      );
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(2);
+      expect(result.filePaths).toContain(projectPrimaryFile);
+      expect(result.filePaths).toContain(cwdOverrideFile);
+      expect(result.memoryContent).toContain('Project primary content');
+      expect(result.memoryContent).toContain('CWD override content');
+    });
+  });
+
+  describe('fallback file support', () => {
+    it('should use fallback file when primary and override do not exist', async () => {
+      const fallbackFile = await createTestFile(
+        path.join(cwd, 'AGENTS.md'),
+        'Fallback AGENTS content',
+      );
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(1);
+      expect(result.filePaths).toEqual([fallbackFile]);
+      expect(result.memoryContent).toContain('Fallback AGENTS content');
+    });
+
+    it('should use first matching fallback when multiple exist', async () => {
+      // Create both AGENTS.md and CLAUDE.md - should use AGENTS.md (first in default list)
+      const agentsFile = await createTestFile(
+        path.join(cwd, 'AGENTS.md'),
+        'AGENTS content',
+      );
+      await createTestFile(path.join(cwd, 'CLAUDE.md'), 'CLAUDE content');
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(1);
+      expect(result.filePaths).toEqual([agentsFile]);
+      expect(result.memoryContent).toContain('AGENTS content');
+      expect(result.memoryContent).not.toContain('CLAUDE content');
+    });
+
+    it('should use second fallback when first is not present', async () => {
+      // Only CLAUDE.md exists (second in default fallback list)
+      const claudeFile = await createTestFile(
+        path.join(cwd, 'CLAUDE.md'),
+        'CLAUDE content',
+      );
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(1);
+      expect(result.filePaths).toEqual([claudeFile]);
+      expect(result.memoryContent).toContain('CLAUDE content');
+    });
+
+    it('should prefer primary over fallback', async () => {
+      const primaryFile = await createTestFile(
+        path.join(cwd, DEFAULT_CONTEXT_FILENAME),
+        'Primary content',
+      );
+      await createTestFile(path.join(cwd, 'AGENTS.md'), 'Fallback content');
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(1);
+      expect(result.filePaths).toEqual([primaryFile]);
+      expect(result.memoryContent).toContain('Primary content');
+      expect(result.memoryContent).not.toContain('Fallback content');
+    });
+
+    it('should prefer override over fallback', async () => {
+      const overrideFile = await createTestFile(
+        path.join(cwd, DEFAULT_OVERRIDE_FILENAME),
+        'Override content',
+      );
+      await createTestFile(path.join(cwd, 'AGENTS.md'), 'Fallback content');
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(1);
+      expect(result.filePaths).toEqual([overrideFile]);
+      expect(result.memoryContent).toContain('Override content');
+      expect(result.memoryContent).not.toContain('Fallback content');
+    });
+
+    it('should use custom fallback filenames when configured', async () => {
+      setFallbackFilenames(['CUSTOM_FALLBACK.md', 'OTHER.md']);
+
+      const customFallbackFile = await createTestFile(
+        path.join(cwd, 'CUSTOM_FALLBACK.md'),
+        'Custom fallback content',
+      );
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(1);
+      expect(result.filePaths).toEqual([customFallbackFile]);
+      expect(result.memoryContent).toContain('Custom fallback content');
+    });
+
+    it('should handle fallback files in hierarchical structure', async () => {
+      // Project root has AGENTS.md, cwd has CLAUDE.md
+      const projectFallbackFile = await createTestFile(
+        path.join(projectRoot, 'AGENTS.md'),
+        'Project AGENTS content',
+      );
+      const cwdFallbackFile = await createTestFile(
+        path.join(cwd, 'CLAUDE.md'),
+        'CWD CLAUDE content',
+      );
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(2);
+      expect(result.filePaths).toContain(projectFallbackFile);
+      expect(result.filePaths).toContain(cwdFallbackFile);
+      expect(result.memoryContent).toContain('Project AGENTS content');
+      expect(result.memoryContent).toContain('CWD CLAUDE content');
+    });
+  });
+
+  describe('override and fallback priority', () => {
+    it('should follow priority: override > primary > fallbacks', async () => {
+      // Create all types of files
+      const overrideFile = await createTestFile(
+        path.join(cwd, DEFAULT_OVERRIDE_FILENAME),
+        'Override wins',
+      );
+      await createTestFile(
+        path.join(cwd, DEFAULT_CONTEXT_FILENAME),
+        'Primary loses',
+      );
+      await createTestFile(path.join(cwd, 'AGENTS.md'), 'Fallback loses');
+      await createTestFile(path.join(cwd, 'CLAUDE.md'), 'Fallback also loses');
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(1);
+      expect(result.filePaths).toEqual([overrideFile]);
+      expect(result.memoryContent).toContain('Override wins');
+      expect(result.memoryContent).not.toContain('Primary loses');
+      expect(result.memoryContent).not.toContain('Fallback loses');
+    });
+
+    it('should handle mixed file types across directories', async () => {
+      // Project root: override, cwd: primary, subdir: fallback
+      const projectOverrideFile = await createTestFile(
+        path.join(projectRoot, DEFAULT_OVERRIDE_FILENAME),
+        'Project override',
+      );
+      const cwdPrimaryFile = await createTestFile(
+        path.join(cwd, DEFAULT_CONTEXT_FILENAME),
+        'CWD primary',
+      );
+      const subdirFallbackFile = await createTestFile(
+        path.join(cwd, 'subdir', 'AGENTS.md'),
+        'Subdir fallback',
+      );
+
+      const result = await loadServerHierarchicalMemory(
+        cwd,
+        [],
+        false,
+        new FileDiscoveryService(projectRoot),
+        new SimpleExtensionLoader([]),
+        DEFAULT_FOLDER_TRUST,
+      );
+
+      expect(result.fileCount).toBe(3);
+      expect(result.filePaths).toContain(projectOverrideFile);
+      expect(result.filePaths).toContain(cwdPrimaryFile);
+      expect(result.filePaths).toContain(subdirFallbackFile);
+      expect(result.memoryContent).toContain('Project override');
+      expect(result.memoryContent).toContain('CWD primary');
+      expect(result.memoryContent).toContain('Subdir fallback');
+    });
+  });
+
+  describe('loadGlobalMemory with override and fallback', () => {
+    it('should use override file in global directory', async () => {
+      await createTestFile(
+        path.join(homedir, GEMINI_DIR, DEFAULT_CONTEXT_FILENAME),
+        'Global primary',
+      );
+      const globalOverrideFile = await createTestFile(
+        path.join(homedir, GEMINI_DIR, DEFAULT_OVERRIDE_FILENAME),
+        'Global override',
+      );
+
+      const result = await loadGlobalMemory();
+
+      expect(result.files).toHaveLength(1);
+      expect(result.files[0].path).toBe(globalOverrideFile);
+      expect(result.files[0].content).toBe('Global override');
+    });
+
+    it('should use fallback file in global directory when primary not present', async () => {
+      const globalFallbackFile = await createTestFile(
+        path.join(homedir, GEMINI_DIR, 'AGENTS.md'),
+        'Global fallback',
+      );
+
+      const result = await loadGlobalMemory();
+
+      expect(result.files).toHaveLength(1);
+      expect(result.files[0].path).toBe(globalFallbackFile);
+      expect(result.files[0].content).toBe('Global fallback');
+    });
   });
 });

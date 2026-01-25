@@ -62,11 +62,19 @@ Do NOT use this tool:
 - \`fact\` (string, required): The specific fact or piece of information to remember. This should be a clear, self-contained statement. For example, if the user says "My favorite color is blue", the fact would be "My favorite color is blue".`;
 
 export const DEFAULT_CONTEXT_FILENAME = 'GEMINI.md';
+export const DEFAULT_OVERRIDE_FILENAME = 'GEMINI.override.md';
+export const DEFAULT_FALLBACK_FILENAMES = ['AGENTS.md', 'CLAUDE.md'];
 export const MEMORY_SECTION_HEADER = '## Gemini Added Memories';
 
 // This variable will hold the currently configured filename for GEMINI.md context files.
 // It defaults to DEFAULT_CONTEXT_FILENAME but can be overridden by setGeminiMdFilename.
 let currentGeminiMdFilename: string | string[] = DEFAULT_CONTEXT_FILENAME;
+
+// Override filename that takes precedence over primary in the same directory
+let currentOverrideFilename: string = DEFAULT_OVERRIDE_FILENAME;
+
+// Fallback filenames to check if primary/override not found
+let currentFallbackFilenames: string[] = DEFAULT_FALLBACK_FILENAMES;
 
 export function setGeminiMdFilename(newFilename: string | string[]): void {
   if (Array.isArray(newFilename)) {
@@ -90,6 +98,50 @@ export function getAllGeminiMdFilenames(): string[] {
     return currentGeminiMdFilename;
   }
   return [currentGeminiMdFilename];
+}
+
+export function setOverrideFilename(filename: string): void {
+  if (filename && filename.trim() !== '') {
+    currentOverrideFilename = filename.trim();
+  }
+}
+
+export function getOverrideFilename(): string {
+  return currentOverrideFilename;
+}
+
+export function setFallbackFilenames(filenames: string[]): void {
+  if (Array.isArray(filenames) && filenames.length > 0) {
+    currentFallbackFilenames = filenames.map((name) => name.trim());
+  }
+}
+
+export function getFallbackFilenames(): string[] {
+  return currentFallbackFilenames;
+}
+
+/**
+ * Returns all filenames that should be considered for context discovery.
+ * This includes primary filenames, override filename, and fallback filenames.
+ * Used for comprehensive listing of all possible context files.
+ */
+export function getAllContextFilenames(): string[] {
+  const allFilenames = new Set<string>();
+
+  // Add primary filenames
+  for (const filename of getAllGeminiMdFilenames()) {
+    allFilenames.add(filename);
+  }
+
+  // Add override filename
+  allFilenames.add(currentOverrideFilename);
+
+  // Add fallback filenames
+  for (const filename of currentFallbackFilenames) {
+    allFilenames.add(filename);
+  }
+
+  return Array.from(allFilenames);
 }
 
 interface SaveMemoryParams {

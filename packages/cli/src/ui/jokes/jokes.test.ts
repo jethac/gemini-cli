@@ -6,10 +6,13 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { BuiltinJokeProvider, PHRASE_SETS } from './builtinProvider.js';
 import { EmptyJokeProvider } from './emptyProvider.js';
-import { CustomFileProvider } from './customFileProvider.js';
+import {
+  CustomPhraseProvider,
+  loadCustomProviders,
+  CUSTOM_PHRASES_DIR,
+} from './customFileProvider.js';
 import { jokeRegistry } from './registry.js';
 import { DEFAULT_LOADING_PHRASES_CONFIG } from './types.js';
 import type { JokeProvider } from './types.js';
@@ -112,8 +115,8 @@ describe('JokeProvider System', () => {
     });
   });
 
-  describe('CustomFileProvider', () => {
-    let provider: CustomFileProvider;
+  describe('CustomPhraseProvider', () => {
+    let provider: CustomPhraseProvider;
 
     beforeEach(() => {
       vi.mock('node:fs');
@@ -126,137 +129,85 @@ describe('JokeProvider System', () => {
       vi.restoreAllMocks();
     });
 
-    it('should have correct id and name', () => {
-      provider = new CustomFileProvider();
-      expect(provider.id).toBe('custom');
-      expect(provider.name).toBe('Custom File');
+    it('should derive id from filename', () => {
+      provider = new CustomPhraseProvider('/path/to/goomics.json');
+      expect(provider.id).toBe('goomics');
+      expect(provider.name).toBe('Custom: goomics');
     });
 
-    it('should resolve default path to ~/.gemini/phrases.json', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
-      provider = new CustomFileProvider();
-      provider.getPhrases(); // Trigger load
-      expect(fs.existsSync).toHaveBeenCalledWith(
-        path.join('/mock/home', '.gemini', 'phrases.json'),
-      );
-    });
-
-    it('should resolve relative path to ~/.gemini/', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
-      provider = new CustomFileProvider('my-phrases.json');
-      provider.getPhrases(); // Trigger load
-      expect(fs.existsSync).toHaveBeenCalledWith(
-        path.join('/mock/home', '.gemini', 'my-phrases.json'),
-      );
-    });
-
-    it('should use absolute path as-is', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
-      provider = new CustomFileProvider('/absolute/path/phrases.json');
-      provider.getPhrases(); // Trigger load
-      expect(fs.existsSync).toHaveBeenCalledWith('/absolute/path/phrases.json');
+    it('should use provided id if given', () => {
+      provider = new CustomPhraseProvider('/path/to/file.json', 'my-custom-id');
+      expect(provider.id).toBe('my-custom-id');
+      expect(provider.name).toBe('Custom: my-custom-id');
     });
 
     it('should return empty array when file does not exist', () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
-      provider = new CustomFileProvider();
+      provider = new CustomPhraseProvider('/path/to/nonexistent.json');
       expect(provider.getPhrases()).toEqual([]);
       expect(provider.getLoadError()).toBeNull();
     });
 
-    it('should parse simple format { "phrases": [...] }', () => {
+    it('should parse simple array format ["phrase1", "phrase2"]', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify(['Phrase 1', 'Phrase 2']),
+      );
+      provider = new CustomPhraseProvider('/path/to/phrases.json');
+      expect(provider.getPhrases()).toEqual(['Phrase 1', 'Phrase 2']);
+    });
+
+    it('should parse { "phrases": [...] } format for backward compatibility', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue(
         JSON.stringify({ phrases: ['Phrase 1', 'Phrase 2'] }),
       );
-      provider = new CustomFileProvider();
+      provider = new CustomPhraseProvider('/path/to/phrases.json');
       expect(provider.getPhrases()).toEqual(['Phrase 1', 'Phrase 2']);
-      expect(provider.phraseSets).toEqual(['default']);
-    });
-
-    it('should parse sets format { "setName": [...] }', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(
-        JSON.stringify({
-          work: ['Working hard…', 'Almost done…'],
-          fun: ['Party time!', 'Woohoo!'],
-        }),
-      );
-      provider = new CustomFileProvider();
-      expect(provider.getPhrases('work')).toEqual([
-        'Working hard…',
-        'Almost done…',
-      ]);
-      expect(provider.getPhrases('fun')).toEqual(['Party time!', 'Woohoo!']);
-      expect(provider.phraseSets).toContain('work');
-      expect(provider.phraseSets).toContain('fun');
-    });
-
-    it('should fall back to default set when requested set not found', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(
-        JSON.stringify({
-          default: ['Default phrase'],
-          other: ['Other phrase'],
-        }),
-      );
-      provider = new CustomFileProvider();
-      expect(provider.getPhrases('nonexistent')).toEqual(['Default phrase']);
-    });
-
-    it('should return empty array when set not found and no default', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(
-        JSON.stringify({ custom: ['Custom phrase'] }),
-      );
-      provider = new CustomFileProvider();
-      expect(provider.getPhrases('nonexistent')).toEqual([]);
     });
 
     it('should set error for invalid JSON', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue('not valid json');
-      provider = new CustomFileProvider();
+      provider = new CustomPhraseProvider('/path/to/phrases.json');
       provider.getPhrases();
       expect(provider.getLoadError()).toBeDefined();
     });
 
-    it('should set error when data is not an object', () => {
+    it('should set error when array contains non-strings', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue(
-        JSON.stringify(['array', 'not', 'object']),
+        JSON.stringify(['valid', 123, 'also valid']),
       );
-      provider = new CustomFileProvider();
+      provider = new CustomPhraseProvider('/path/to/phrases.json');
       provider.getPhrases();
-      // Arrays are technically objects in JS, so the provider treats them as the "sets format"
-      // and reports the appropriate error when no valid string arrays are found
-      expect(provider.getLoadError()?.message).toBe(
-        'Custom phrases file must contain either { "phrases": [...] } or { "setName": [...] } format',
+      expect(provider.getLoadError()?.message).toContain(
+        'array must contain only strings',
       );
     });
 
-    it('should set error when phrases array contains non-strings', () => {
+    it('should set error when data is not array or object with phrases', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue(
-        JSON.stringify({ phrases: ['valid', 123, 'also valid'] }),
+        JSON.stringify('just a string'),
       );
-      provider = new CustomFileProvider();
+      provider = new CustomPhraseProvider('/path/to/phrases.json');
       provider.getPhrases();
-      expect(provider.getLoadError()?.message).toBe(
-        'phrases array must contain only strings',
+      expect(provider.getLoadError()?.message).toContain(
+        'expected an array of strings',
       );
     });
 
     it('should reload phrases when reload() is called', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValueOnce(
-        JSON.stringify({ phrases: ['Original'] }),
+        JSON.stringify(['Original']),
       );
-      provider = new CustomFileProvider();
+      provider = new CustomPhraseProvider('/path/to/phrases.json');
       expect(provider.getPhrases()).toEqual(['Original']);
 
       vi.mocked(fs.readFileSync).mockReturnValueOnce(
-        JSON.stringify({ phrases: ['Updated'] }),
+        JSON.stringify(['Updated']),
       );
       provider.reload();
       expect(provider.getPhrases()).toEqual(['Updated']);
@@ -265,17 +216,74 @@ describe('JokeProvider System', () => {
     it('should get a random phrase', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue(
-        JSON.stringify({ phrases: ['One', 'Two', 'Three'] }),
+        JSON.stringify(['One', 'Two', 'Three']),
       );
-      provider = new CustomFileProvider();
+      provider = new CustomPhraseProvider('/path/to/phrases.json');
       const phrase = provider.getRandomPhrase();
       expect(['One', 'Two', 'Three']).toContain(phrase);
     });
 
     it('should return undefined when no phrases available', () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
-      provider = new CustomFileProvider();
+      provider = new CustomPhraseProvider('/path/to/phrases.json');
       expect(provider.getRandomPhrase()).toBeUndefined();
+    });
+  });
+
+  describe('loadCustomProviders', () => {
+    beforeEach(() => {
+      vi.mock('node:fs');
+      vi.mock('node:os', () => ({
+        homedir: () => '/mock/home',
+      }));
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should return empty array when directory does not exist', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+      const providers = loadCustomProviders('/nonexistent/dir');
+      expect(providers).toEqual([]);
+    });
+
+    it('should load providers from JSON files in directory', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      (fs.readdirSync as ReturnType<typeof vi.fn>).mockReturnValue([
+        'goomics.json',
+        'work.json',
+        'readme.txt', // Should be ignored
+      ]);
+      vi.mocked(fs.statSync).mockReturnValue({
+        isFile: () => true,
+      } as fs.Stats);
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(['Phrase']));
+
+      const providers = loadCustomProviders('/mock/phrases');
+
+      expect(providers.length).toBe(2);
+      expect(providers.map((p) => p.id)).toContain('goomics');
+      expect(providers.map((p) => p.id)).toContain('work');
+    });
+
+    it('should use CUSTOM_PHRASES_DIR as default directory', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+      loadCustomProviders();
+      expect(fs.existsSync).toHaveBeenCalledWith(CUSTOM_PHRASES_DIR);
+    });
+
+    it('should skip directories with same name as json files', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      (fs.readdirSync as ReturnType<typeof vi.fn>).mockReturnValue([
+        'goomics.json',
+      ]);
+      vi.mocked(fs.statSync).mockReturnValue({
+        isFile: () => false,
+      } as fs.Stats);
+
+      const providers = loadCustomProviders('/mock/phrases');
+      expect(providers.length).toBe(0);
     });
   });
 
@@ -384,13 +392,46 @@ describe('JokeProvider System', () => {
       expect(providers.map((p) => p.id)).toContain('none');
     });
 
-    it('should configure custom provider when selected', () => {
+    it('should auto-load custom providers when non-builtin provider is configured', () => {
       vi.mock('node:fs');
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      (fs.readdirSync as ReturnType<typeof vi.fn>).mockReturnValue([
+        'goomics.json',
+      ]);
+      vi.mocked(fs.statSync).mockReturnValue({
+        isFile: () => true,
+      } as fs.Stats);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify(['Goomics phrase']),
+      );
 
-      jokeRegistry.configure({ provider: 'custom', customFile: 'test.json' });
-      expect(jokeRegistry.hasProvider('custom')).toBe(true);
-      expect(jokeRegistry.getActiveProvider()?.id).toBe('custom');
+      // Configure with a custom provider name triggers auto-load
+      jokeRegistry.configure({ provider: 'goomics' });
+
+      expect(jokeRegistry.hasProvider('goomics')).toBe(true);
+      expect(jokeRegistry.getActiveProvider()?.id).toBe('goomics');
+
+      vi.restoreAllMocks();
+    });
+
+    it('should list custom provider IDs', () => {
+      vi.mock('node:fs');
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      (fs.readdirSync as ReturnType<typeof vi.fn>).mockReturnValue([
+        'goomics.json',
+        'work.json',
+      ]);
+      vi.mocked(fs.statSync).mockReturnValue({
+        isFile: () => true,
+      } as fs.Stats);
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(['Phrase']));
+
+      const customIds = jokeRegistry.listCustomProviderIds();
+
+      expect(customIds).toContain('goomics');
+      expect(customIds).toContain('work');
+      expect(customIds).not.toContain('builtin');
+      expect(customIds).not.toContain('none');
 
       vi.restoreAllMocks();
     });

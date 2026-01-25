@@ -43,22 +43,21 @@ export interface LoadingPhrasesConfig {
    * Which provider to use.
    * - 'builtin': Use built-in phrases (default)
    * - 'none': No phrases (silent loading)
-   * - 'custom': Use user's custom file
-   * - string: Extension-provided provider ID
+   * - string: Custom provider name (loads from ~/.gemini/phrases/<name>.json)
+   *
+   * Custom providers are auto-discovered from ~/.gemini/phrases/ directory.
+   * Each .json file becomes a provider with id = filename (without .json).
+   *
+   * Example: ~/.gemini/phrases/goomics.json -> provider: "goomics"
    */
-  provider: 'builtin' | 'none' | 'custom' | string;
+  provider: 'builtin' | 'none' | string;
 
   /**
    * Which phrase set to use from the provider.
    * Provider-specific. For builtin: 'default', 'minimal', 'programming', 'scifi'
+   * Custom providers typically have only a 'default' set.
    */
   phraseSet?: string;
-
-  /**
-   * Path to custom phrases file (when provider is 'custom').
-   * Relative to ~/.gemini/ or absolute path.
-   */
-  customFile?: string;
 }
 
 /**

@@ -595,8 +595,9 @@ const SETTINGS_SCHEMA = {
             default: 'builtin',
             description: oneLine`
               Which phrase provider to use.
-              "builtin" uses built-in phrases, "none" disables phrases entirely,
-              "custom" uses a custom file (~/.gemini/phrases.json).
+              "builtin" uses built-in phrases, "none" disables phrases entirely.
+              Custom providers are loaded from ~/.gemini/phrases/<name>.json.
+              Example: "goomics" loads ~/.gemini/phrases/goomics.json.
             `,
             showInDialog: false,
           },
@@ -609,18 +610,6 @@ const SETTINGS_SCHEMA = {
             description: oneLine`
               Which phrase set to use from the provider.
               For builtin: "default", "minimal", "programming", "scifi".
-            `,
-            showInDialog: false,
-          },
-          customFile: {
-            type: 'string',
-            label: 'Custom Phrases File',
-            category: 'UI',
-            requiresRestart: false,
-            default: undefined as string | undefined,
-            description: oneLine`
-              Path to custom phrases JSON file (relative to ~/.gemini/ or absolute).
-              Used when provider is "custom".
             `,
             showInDialog: false,
           },

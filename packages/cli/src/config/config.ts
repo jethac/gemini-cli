@@ -425,6 +425,7 @@ export async function loadCliConfig(
   const loadedSettings = loadSettings(cwd);
 
   // Configure joke provider registry from settings
+  // Custom providers are auto-discovered from ~/.gemini/phrases/ directory
   const loadingPhrasesConfig = settings.ui?.loadingPhrases;
   const accessibilitySettings = settings.ui?.accessibility;
   jokeRegistry.configure({
@@ -435,7 +436,6 @@ export async function loadCliConfig(
       true,
     provider: loadingPhrasesConfig?.provider ?? 'builtin',
     phraseSet: loadingPhrasesConfig?.phraseSet ?? 'default',
-    customFile: loadingPhrasesConfig?.customFile,
   });
 
   if (argv.sandbox) {

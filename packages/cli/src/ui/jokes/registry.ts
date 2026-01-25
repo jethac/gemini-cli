@@ -8,7 +8,10 @@ import type { JokeProvider, LoadingPhrasesConfig } from './types.js';
 import { DEFAULT_LOADING_PHRASES_CONFIG } from './types.js';
 import { BuiltinJokeProvider } from './builtinProvider.js';
 import { EmptyJokeProvider } from './emptyProvider.js';
-import { CustomFileProvider } from './customFileProvider.js';
+import {
+  loadCustomProviders,
+  CUSTOM_PHRASES_DIR,
+} from './customFileProvider.js';
 
 /**
  * Registry for joke providers.
@@ -17,7 +20,7 @@ import { CustomFileProvider } from './customFileProvider.js';
 class JokeProviderRegistry {
   private providers = new Map<string, JokeProvider>();
   private config: LoadingPhrasesConfig = { ...DEFAULT_LOADING_PHRASES_CONFIG };
-  private customProvider: CustomFileProvider | null = null;
+  private customProvidersLoaded = false;
 
   constructor() {
     // Register built-in providers
@@ -43,15 +46,35 @@ class JokeProviderRegistry {
   }
 
   /**
+   * Load custom providers from ~/.gemini/phrases/ directory.
+   * Each .json file becomes a provider with id = filename (without .json).
+   *
+   * Example:
+   *   ~/.gemini/phrases/goomics.json -> provider: "goomics"
+   *   ~/.gemini/phrases/work.json -> provider: "work"
+   */
+  loadCustomProviders(directory: string = CUSTOM_PHRASES_DIR): void {
+    const customProviders = loadCustomProviders(directory);
+    for (const provider of customProviders) {
+      this.register(provider);
+    }
+    this.customProvidersLoaded = true;
+  }
+
+  /**
    * Configure the loading phrases system.
+   * Automatically loads custom providers if not already loaded.
    */
   configure(config: Partial<LoadingPhrasesConfig>): void {
     this.config = { ...this.config, ...config };
 
-    // If custom provider is selected, ensure it's loaded with the correct file
-    if (this.config.provider === 'custom') {
-      this.customProvider = new CustomFileProvider(this.config.customFile);
-      this.providers.set('custom', this.customProvider);
+    // Auto-load custom providers on first configure if a non-builtin provider is selected
+    if (
+      !this.customProvidersLoaded &&
+      this.config.provider !== 'builtin' &&
+      this.config.provider !== 'none'
+    ) {
+      this.loadCustomProviders();
     }
   }
 
@@ -97,6 +120,19 @@ class JokeProviderRegistry {
   }
 
   /**
+   * List custom provider IDs (from ~/.gemini/phrases/).
+   * Loads custom providers if not already loaded.
+   */
+  listCustomProviderIds(): string[] {
+    if (!this.customProvidersLoaded) {
+      this.loadCustomProviders();
+    }
+    return this.listProviders()
+      .filter((p) => p.id !== 'builtin' && p.id !== 'none')
+      .map((p) => p.id);
+  }
+
+  /**
    * Get a provider by ID.
    */
   getProvider(id: string): JokeProvider | undefined {
@@ -117,7 +153,7 @@ class JokeProviderRegistry {
   reset(): void {
     this.providers.clear();
     this.config = { ...DEFAULT_LOADING_PHRASES_CONFIG };
-    this.customProvider = null;
+    this.customProvidersLoaded = false;
     this.register(new BuiltinJokeProvider());
     this.register(new EmptyJokeProvider());
   }

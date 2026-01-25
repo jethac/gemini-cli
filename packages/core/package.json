@@ -68,6 +68,8 @@
     "tree-sitter-bash": "^0.25.0",
     "undici": "^7.10.0",
     "uuid": "^13.0.0",
+    "vscode-jsonrpc": "^8.2.0",
+    "vscode-languageserver-protocol": "^3.17.5",
     "web-tree-sitter": "^0.25.10",
     "zod": "^3.25.76"
   },

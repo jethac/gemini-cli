@@ -25,6 +25,14 @@ export const ACTIVATE_SKILL_TOOL_NAME = 'activate_skill';
 export const EDIT_TOOL_NAMES = new Set([EDIT_TOOL_NAME, WRITE_FILE_TOOL_NAME]);
 export const ASK_USER_TOOL_NAME = 'ask_user';
 
+// LSP Tools
+export const LSP_GOTO_DEFINITION_TOOL_NAME = 'lsp_goto_definition';
+export const LSP_FIND_REFERENCES_TOOL_NAME = 'lsp_find_references';
+export const LSP_DIAGNOSTICS_TOOL_NAME = 'lsp_diagnostics';
+export const LSP_SYMBOLS_TOOL_NAME = 'lsp_symbols';
+export const LSP_PREPARE_RENAME_TOOL_NAME = 'lsp_prepare_rename';
+export const LSP_RENAME_TOOL_NAME = 'lsp_rename';
+
 /** Prefix used for tools discovered via the toolDiscoveryCommand. */
 export const DISCOVERED_TOOL_PREFIX = 'discovered_tool_';
 
@@ -46,6 +54,12 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   MEMORY_TOOL_NAME,
   ACTIVATE_SKILL_TOOL_NAME,
   ASK_USER_TOOL_NAME,
+  LSP_GOTO_DEFINITION_TOOL_NAME,
+  LSP_FIND_REFERENCES_TOOL_NAME,
+  LSP_DIAGNOSTICS_TOOL_NAME,
+  LSP_SYMBOLS_TOOL_NAME,
+  LSP_PREPARE_RENAME_TOOL_NAME,
+  LSP_RENAME_TOOL_NAME,
 ] as const;
 
 /**

@@ -25,6 +25,12 @@ export const ACTIVATE_SKILL_TOOL_NAME = 'activate_skill';
 export const EDIT_TOOL_NAMES = new Set([EDIT_TOOL_NAME, WRITE_FILE_TOOL_NAME]);
 export const ASK_USER_TOOL_NAME = 'ask_user';
 
+// Session management tools
+export const SESSION_LIST_TOOL_NAME = 'session_list';
+export const SESSION_SEARCH_TOOL_NAME = 'session_search';
+export const SESSION_READ_TOOL_NAME = 'session_read';
+export const SESSION_INFO_TOOL_NAME = 'session_info';
+
 /** Prefix used for tools discovered via the toolDiscoveryCommand. */
 export const DISCOVERED_TOOL_PREFIX = 'discovered_tool_';
 
@@ -46,6 +52,10 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   MEMORY_TOOL_NAME,
   ACTIVATE_SKILL_TOOL_NAME,
   ASK_USER_TOOL_NAME,
+  SESSION_LIST_TOOL_NAME,
+  SESSION_SEARCH_TOOL_NAME,
+  SESSION_READ_TOOL_NAME,
+  SESSION_INFO_TOOL_NAME,
 ] as const;
 
 /**

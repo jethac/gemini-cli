@@ -31,6 +31,10 @@ import { WriteFileTool } from '../tools/write-file.js';
 import { WebFetchTool } from '../tools/web-fetch.js';
 import { MemoryTool, setGeminiMdFilename } from '../tools/memoryTool.js';
 import { WebSearchTool } from '../tools/web-search.js';
+import {
+  AstGrepSearchTool,
+  AstGrepReplaceTool,
+} from '../tools/ast-grep/index.js';
 import { GeminiClient } from '../core/client.js';
 import { BaseLlmClient } from '../core/baseLlmClient.js';
 import type { HookDefinition, HookEventName } from '../hooks/types.js';
@@ -1978,6 +1982,8 @@ export class Config {
     if (this.getUseWriteTodos()) {
       registerCoreTool(WriteTodosTool);
     }
+    registerCoreTool(AstGrepSearchTool, this);
+    registerCoreTool(AstGrepReplaceTool, this);
 
     // Register Subagents as Tools
     this.registerSubAgentTools(registry);

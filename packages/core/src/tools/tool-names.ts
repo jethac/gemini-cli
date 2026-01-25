@@ -24,6 +24,8 @@ export const GET_INTERNAL_DOCS_TOOL_NAME = 'get_internal_docs';
 export const ACTIVATE_SKILL_TOOL_NAME = 'activate_skill';
 export const EDIT_TOOL_NAMES = new Set([EDIT_TOOL_NAME, WRITE_FILE_TOOL_NAME]);
 export const ASK_USER_TOOL_NAME = 'ask_user';
+export const AST_GREP_SEARCH_TOOL_NAME = 'ast_grep_search';
+export const AST_GREP_REPLACE_TOOL_NAME = 'ast_grep_replace';
 
 /** Prefix used for tools discovered via the toolDiscoveryCommand. */
 export const DISCOVERED_TOOL_PREFIX = 'discovered_tool_';
@@ -46,6 +48,8 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   MEMORY_TOOL_NAME,
   ACTIVATE_SKILL_TOOL_NAME,
   ASK_USER_TOOL_NAME,
+  AST_GREP_SEARCH_TOOL_NAME,
+  AST_GREP_REPLACE_TOOL_NAME,
 ] as const;
 
 /**

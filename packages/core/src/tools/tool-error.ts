@@ -78,6 +78,10 @@ export enum ToolErrorType {
 
   // Hook-specific Errors
   STOP_EXECUTION = 'stop_execution',
+
+  // AST-grep-specific Errors
+  AST_GREP_BINARY_NOT_FOUND = 'ast_grep_binary_not_found',
+  AST_GREP_EXECUTION_ERROR = 'ast_grep_execution_error',
 }
 
 /**

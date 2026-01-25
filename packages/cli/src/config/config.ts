@@ -58,6 +58,7 @@ import type { ExtensionEvents } from '@google/gemini-cli-core/src/utils/extensio
 import { requestConsentNonInteractive } from './extensions/consent.js';
 import { promptForSetting } from './extensions/extensionSettings.js';
 import type { EventEmitter } from 'node:stream';
+import { jokeRegistry } from '../ui/jokes/index.js';
 import { runExitCleanup } from '../utils/cleanup.js';
 
 export interface CliArgs {
@@ -422,6 +423,20 @@ export async function loadCliConfig(
   const debugMode = isDebugMode(argv);
 
   const loadedSettings = loadSettings(cwd);
+
+  // Configure joke provider registry from settings
+  const loadingPhrasesConfig = settings.ui?.loadingPhrases;
+  const accessibilitySettings = settings.ui?.accessibility;
+  jokeRegistry.configure({
+    // Check both new loadingPhrases.enabled and legacy accessibility.enableLoadingPhrases
+    enabled:
+      loadingPhrasesConfig?.enabled ??
+      accessibilitySettings?.enableLoadingPhrases ??
+      true,
+    provider: loadingPhrasesConfig?.provider ?? 'builtin',
+    phraseSet: loadingPhrasesConfig?.phraseSet ?? 'default',
+    customFile: loadingPhrasesConfig?.customFile,
+  });
 
   if (argv.sandbox) {
     process.env['GEMINI_SANDBOX'] = 'true';

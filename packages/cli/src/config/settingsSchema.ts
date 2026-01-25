@@ -562,11 +562,69 @@ const SETTINGS_SCHEMA = {
         requiresRestart: false,
         default: [] as string[],
         description: oneLine`
+          DEPRECATED: Use ui.loadingPhrases.provider="custom" with a phrases.json file instead.
           Custom witty phrases to display during loading.
-          When provided, the CLI cycles through these instead of the defaults.
         `,
         showInDialog: false,
         items: { type: 'string' },
+      },
+      loadingPhrases: {
+        type: 'object',
+        label: 'Loading Phrases',
+        category: 'UI',
+        requiresRestart: false,
+        default: {},
+        description: 'Configure loading phrases shown during AI processing.',
+        showInDialog: false,
+        properties: {
+          enabled: {
+            type: 'boolean',
+            label: 'Enable Loading Phrases',
+            category: 'UI',
+            requiresRestart: false,
+            default: true,
+            description:
+              'Show loading phrases during processing. Set to false for silent loading.',
+            showInDialog: true,
+          },
+          provider: {
+            type: 'string',
+            label: 'Phrase Provider',
+            category: 'UI',
+            requiresRestart: false,
+            default: 'builtin',
+            description: oneLine`
+              Which phrase provider to use.
+              "builtin" uses built-in phrases, "none" disables phrases entirely,
+              "custom" uses a custom file (~/.gemini/phrases.json).
+            `,
+            showInDialog: false,
+          },
+          phraseSet: {
+            type: 'string',
+            label: 'Phrase Set',
+            category: 'UI',
+            requiresRestart: false,
+            default: 'default',
+            description: oneLine`
+              Which phrase set to use from the provider.
+              For builtin: "default", "minimal", "programming", "scifi".
+            `,
+            showInDialog: false,
+          },
+          customFile: {
+            type: 'string',
+            label: 'Custom Phrases File',
+            category: 'UI',
+            requiresRestart: false,
+            default: undefined as string | undefined,
+            description: oneLine`
+              Path to custom phrases JSON file (relative to ~/.gemini/ or absolute).
+              Used when provider is "custom".
+            `,
+            showInDialog: false,
+          },
+        },
       },
       accessibility: {
         type: 'object',

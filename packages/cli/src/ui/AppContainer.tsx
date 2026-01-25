@@ -1316,6 +1316,9 @@ Logging in with Google... Restarting Gemini CLI to continue.
     streamingState,
     shouldShowFocusHint,
     retryStatus,
+    showTips: !settings.merged.ui.hideTips,
+    // Legacy support: pass customWittyPhrases if defined (deprecated)
+    customWittyPhrases: settings.merged.ui.customWittyPhrases,
   });
 
   const handleGlobalKeypress = useCallback(

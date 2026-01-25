@@ -6,18 +6,29 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { INFORMATIVE_TIPS } from '../constants/tips.js';
-import { WITTY_LOADING_PHRASES } from '../constants/wittyPhrases.js';
+import { jokeRegistry } from '../jokes/index.js';
 
 export const PHRASE_CHANGE_INTERVAL_MS = 15000;
 export const INTERACTIVE_SHELL_WAITING_PHRASE =
   'Interactive shell awaiting input... press tab to focus shell';
 
 /**
+ * Default fallback phrase when no provider returns a phrase.
+ */
+const DEFAULT_FALLBACK_PHRASE = 'Processing…';
+
+/**
  * Custom hook to manage cycling through loading phrases.
+ *
+ * Uses the jokeRegistry to get phrases from the configured provider.
+ * Falls back to tips (with 1/6 probability after first request) when
+ * not using custom phrases.
+ *
  * @param isActive Whether the phrase cycling should be active.
  * @param isWaiting Whether to show a specific waiting phrase.
  * @param shouldShowFocusHint Whether to show the shell focus hint.
- * @param customPhrases Optional list of custom phrases to use.
+ * @param customPhrases Optional list of custom phrases to use (legacy support).
+ * @param showTips Whether to show informative tips (default: true).
  * @returns The current loading phrase.
  */
 export const usePhraseCycler = (
@@ -25,14 +36,14 @@ export const usePhraseCycler = (
   isWaiting: boolean,
   shouldShowFocusHint: boolean,
   customPhrases?: string[],
+  showTips: boolean = true,
 ) => {
-  const loadingPhrases =
-    customPhrases && customPhrases.length > 0
-      ? customPhrases
-      : WITTY_LOADING_PHRASES;
+  // Legacy support: if customPhrases are provided directly, use them
+  // This maintains backward compatibility with existing callers
+  const useLegacyCustomPhrases = customPhrases && customPhrases.length > 0;
 
   const [currentLoadingPhrase, setCurrentLoadingPhrase] = useState(
-    loadingPhrases[0],
+    DEFAULT_FALLBACK_PHRASE,
   );
 
   const phraseIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -56,29 +67,45 @@ export const usePhraseCycler = (
     }
 
     if (!isActive) {
-      setCurrentLoadingPhrase(loadingPhrases[0]);
+      // Get initial phrase from provider or use fallback
+      const initialPhrase = useLegacyCustomPhrases
+        ? customPhrases[0]
+        : (jokeRegistry.getRandomPhrase() ?? DEFAULT_FALLBACK_PHRASE);
+      setCurrentLoadingPhrase(initialPhrase);
       return;
     }
 
     const setRandomPhrase = () => {
-      if (customPhrases && customPhrases.length > 0) {
+      // Legacy mode: use customPhrases directly
+      if (useLegacyCustomPhrases) {
         const randomIndex = Math.floor(Math.random() * customPhrases.length);
         setCurrentLoadingPhrase(customPhrases[randomIndex]);
-      } else {
-        let phraseList;
-        // Show a tip on the first request after startup, then continue with 1/6 chance
+        return;
+      }
+
+      // New mode: use jokeRegistry with tips integration
+      let phrase: string | undefined;
+
+      // Show a tip on the first request after startup, then continue with 1/6 chance
+      if (showTips) {
         if (!hasShownFirstRequestTipRef.current) {
           // Show a tip during the first request
-          phraseList = INFORMATIVE_TIPS;
+          const tipIndex = Math.floor(Math.random() * INFORMATIVE_TIPS.length);
+          phrase = INFORMATIVE_TIPS[tipIndex];
           hasShownFirstRequestTipRef.current = true;
-        } else {
+        } else if (Math.random() < 1 / 6) {
           // Roughly 1 in 6 chance to show a tip after the first request
-          const showTip = Math.random() < 1 / 6;
-          phraseList = showTip ? INFORMATIVE_TIPS : WITTY_LOADING_PHRASES;
+          const tipIndex = Math.floor(Math.random() * INFORMATIVE_TIPS.length);
+          phrase = INFORMATIVE_TIPS[tipIndex];
         }
-        const randomIndex = Math.floor(Math.random() * phraseList.length);
-        setCurrentLoadingPhrase(phraseList[randomIndex]);
       }
+
+      // If we didn't select a tip, get a phrase from the registry
+      if (!phrase) {
+        phrase = jokeRegistry.getRandomPhrase();
+      }
+
+      setCurrentLoadingPhrase(phrase ?? DEFAULT_FALLBACK_PHRASE);
     };
 
     // Select an initial random phrase
@@ -95,7 +122,14 @@ export const usePhraseCycler = (
         phraseIntervalRef.current = null;
       }
     };
-  }, [isActive, isWaiting, shouldShowFocusHint, customPhrases, loadingPhrases]);
+  }, [
+    isActive,
+    isWaiting,
+    shouldShowFocusHint,
+    customPhrases,
+    useLegacyCustomPhrases,
+    showTips,
+  ]);
 
   return currentLoadingPhrase;
 };

@@ -14,6 +14,7 @@ import {
 } from './usePhraseCycler.js';
 import { INFORMATIVE_TIPS } from '../constants/tips.js';
 import { WITTY_LOADING_PHRASES } from '../constants/wittyPhrases.js';
+import { PHRASE_SETS, jokeRegistry } from '../jokes/index.js';
 
 // Test component to consume the hook
 const TestComponent = ({
@@ -39,6 +40,8 @@ const TestComponent = ({
 describe('usePhraseCycler', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    // Reset the jokeRegistry to ensure consistent test behavior
+    jokeRegistry.reset();
   });
 
   afterEach(() => {
@@ -50,7 +53,12 @@ describe('usePhraseCycler', () => {
     const { lastFrame } = render(
       <TestComponent isActive={false} isWaiting={false} />,
     );
-    expect(WITTY_LOADING_PHRASES).toContain(lastFrame());
+    // Check against both legacy and new phrase sources
+    const phrase = lastFrame();
+    expect(
+      WITTY_LOADING_PHRASES.includes(phrase!) ||
+        PHRASE_SETS['default'].includes(phrase!),
+    ).toBe(true);
   });
 
   it('should show "Waiting for user confirmation..." when isWaiting is true', async () => {
@@ -130,7 +138,11 @@ describe('usePhraseCycler', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PHRASE_CHANGE_INTERVAL_MS + 100);
     });
-    expect(WITTY_LOADING_PHRASES).toContain(lastFrame());
+    const phrase = lastFrame();
+    expect(
+      WITTY_LOADING_PHRASES.includes(phrase!) ||
+        PHRASE_SETS['default'].includes(phrase!),
+    ).toBe(true);
   });
 
   it('should cycle through phrases when isActive is true and not waiting', async () => {
@@ -148,12 +160,20 @@ describe('usePhraseCycler', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PHRASE_CHANGE_INTERVAL_MS + 100);
     });
-    expect(WITTY_LOADING_PHRASES).toContain(lastFrame());
+    let phrase = lastFrame();
+    expect(
+      WITTY_LOADING_PHRASES.includes(phrase!) ||
+        PHRASE_SETS['default'].includes(phrase!),
+    ).toBe(true);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PHRASE_CHANGE_INTERVAL_MS);
     });
-    expect(WITTY_LOADING_PHRASES).toContain(lastFrame());
+    phrase = lastFrame();
+    expect(
+      WITTY_LOADING_PHRASES.includes(phrase!) ||
+        PHRASE_SETS['default'].includes(phrase!),
+    ).toBe(true);
   });
 
   it('should reset to a phrase when isActive becomes true after being false', async () => {
@@ -279,7 +299,11 @@ describe('usePhraseCycler', () => {
       await vi.advanceTimersByTimeAsync(PHRASE_CHANGE_INTERVAL_MS); // Wait for first cycle
     });
 
-    expect(WITTY_LOADING_PHRASES).toContain(lastFrame());
+    const phrase2 = lastFrame();
+    expect(
+      WITTY_LOADING_PHRASES.includes(phrase2!) ||
+        PHRASE_SETS['default'].includes(phrase2!),
+    ).toBe(true);
   });
 
   it('should fall back to witty phrases if custom phrases are an empty array', async () => {
@@ -295,7 +319,11 @@ describe('usePhraseCycler', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PHRASE_CHANGE_INTERVAL_MS); // Next phrase after tip
     });
-    expect(WITTY_LOADING_PHRASES).toContain(lastFrame());
+    const phrase = lastFrame();
+    expect(
+      WITTY_LOADING_PHRASES.includes(phrase!) ||
+        PHRASE_SETS['default'].includes(phrase!),
+    ).toBe(true);
   });
 
   it('should reset phrase when transitioning from waiting to active', async () => {
@@ -312,7 +340,11 @@ describe('usePhraseCycler', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PHRASE_CHANGE_INTERVAL_MS);
     });
-    expect(WITTY_LOADING_PHRASES).toContain(lastFrame());
+    let phrase = lastFrame();
+    expect(
+      WITTY_LOADING_PHRASES.includes(phrase!) ||
+        PHRASE_SETS['default'].includes(phrase!),
+    ).toBe(true);
 
     // Go to waiting state
     rerender(<TestComponent isActive={false} isWaiting={true} />);
@@ -326,6 +358,10 @@ describe('usePhraseCycler', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PHRASE_CHANGE_INTERVAL_MS); // Skip the tip and get next phrase
     });
-    expect(WITTY_LOADING_PHRASES).toContain(lastFrame());
+    phrase = lastFrame();
+    expect(
+      WITTY_LOADING_PHRASES.includes(phrase!) ||
+        PHRASE_SETS['default'].includes(phrase!),
+    ).toBe(true);
   });
 });

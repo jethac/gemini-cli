@@ -17,7 +17,16 @@ export interface UseLoadingIndicatorProps {
   streamingState: StreamingState;
   shouldShowFocusHint: boolean;
   retryStatus: RetryAttemptPayload | null;
+  /**
+   * @deprecated Use ui.loadingPhrases settings instead.
+   * Legacy support for custom phrases passed directly.
+   */
   customWittyPhrases?: string[];
+  /**
+   * Whether to show informative tips during loading.
+   * Defaults to true.
+   */
+  showTips?: boolean;
 }
 
 export const useLoadingIndicator = ({
@@ -25,6 +34,7 @@ export const useLoadingIndicator = ({
   shouldShowFocusHint,
   retryStatus,
   customWittyPhrases,
+  showTips = true,
 }: UseLoadingIndicatorProps) => {
   const [timerResetKey, setTimerResetKey] = useState(0);
   const isTimerActive = streamingState === StreamingState.Responding;
@@ -38,6 +48,7 @@ export const useLoadingIndicator = ({
     isWaiting,
     shouldShowFocusHint,
     customWittyPhrases,
+    showTips,
   );
 
   const [retainedElapsedTime, setRetainedElapsedTime] = useState(0);

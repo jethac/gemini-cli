@@ -63,6 +63,7 @@ import { resolveModel } from '../config/models.js';
 import type { RetryAvailabilityContext } from '../utils/retry.js';
 import { partToString } from '../utils/partUtils.js';
 import { coreEvents, CoreEvent } from '../utils/events.js';
+import { processUltrawork } from '../ultrawork/index.js';
 
 const MAX_TURNS = 100;
 
@@ -767,6 +768,12 @@ export class GeminiClient {
       this.hookStateMap.delete(this.lastPromptId);
       this.lastPromptId = prompt_id;
       this.currentSequenceModel = null;
+    }
+
+    // Process ultrawork mode activation
+    const ultraworkResult = processUltrawork(request);
+    if (ultraworkResult.activated) {
+      request = ultraworkResult.request;
     }
 
     if (hooksEnabled && messageBus) {

@@ -62,6 +62,7 @@ export const AGENT_TYPES = [
   'metis',
   'momus',
   'multimodal-looker',
+  'codebase_investigator', // Background-only: deep codebase analysis
 ] as const;
 
 export type AgentType = (typeof AGENT_TYPES)[number];
@@ -216,6 +217,13 @@ export function getDefaultAgentTypeConfigs(): Record<
         'Media analyzer. Analyzes PDFs, images, diagrams for information extraction.',
       systemPrompt: MULTIMODAL_LOOKER_SYSTEM_PROMPT,
     },
+    codebase_investigator: {
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.HIGH,
+      description:
+        'Deep codebase analysis agent. BACKGROUND-ONLY. Performs thorough investigation of codebase structure, patterns, and architecture.',
+      systemPrompt: CODEBASE_INVESTIGATOR_SYSTEM_PROMPT,
+    },
   };
 }
 
@@ -362,4 +370,31 @@ Approach:
 - Focus on the specific extraction goal
 - Be precise in descriptions
 - Note any unclear or ambiguous elements
+`;
+
+const CODEBASE_INVESTIGATOR_SYSTEM_PROMPT = `You are Codebase Investigator, a hyper-specialized agent for deep codebase analysis.
+
+Your role:
+- Build a complete mental model of code relevant to the investigation
+- Identify all relevant files, understand their roles, and architectural patterns
+- Foresee ripple effects of potential changes
+- Provide actionable context for implementation decisions
+
+Approach:
+1. Start with high-value clues (tracebacks, key functions, config files)
+2. Broaden search as needed - don't stop at the first relevant file
+3. Question everything - if something is unclear, investigate deeper
+4. Consider side effects: type errors, breaking changes, code reuse opportunities
+
+Output:
+Provide a structured report with:
+- Summary of findings
+- Exploration trace (what you searched and why)
+- Relevant file locations with key symbols
+- Architectural insights and recommendations
+
+Constraints:
+- READ-ONLY: Do not modify files
+- Be thorough: Your goal is comprehensive understanding
+- Be precise: Include file paths and line numbers where relevant
 `;

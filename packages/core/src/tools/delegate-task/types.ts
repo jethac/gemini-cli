@@ -46,6 +46,27 @@ export interface DelegateTaskParams {
    * Session ID to continue an existing session.
    */
   session_id?: string;
+
+  /**
+   * Override the default timeout in minutes (max: 30).
+   * Useful for long-running investigations or capacity issues.
+   */
+  timeout_minutes?: number;
+
+  /**
+   * Override the default maximum turns for the agent.
+   */
+  max_turns?: number;
+
+  /**
+   * Whether to auto-retry on model capacity errors (429/503).
+   */
+  retry_on_capacity?: boolean;
+
+  /**
+   * Number of retry attempts before failing (default: 3).
+   */
+  retry_attempts?: number;
 }
 
 /**

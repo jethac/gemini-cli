@@ -23,6 +23,10 @@ import {
 import type { DelegateTaskParams, DelegateTaskResult } from './types.js';
 import { BackgroundTaskManager } from './task-manager.js';
 import { ToolErrorType } from '../tool-error.js';
+import {
+  isBackgroundOnlyAgent,
+  getBackgroundAgentDefaults,
+} from './background-only.js';
 
 /**
  * Zod schema for delegate_task parameters.
@@ -57,6 +61,31 @@ const delegateTaskSchema = z
       .string()
       .optional()
       .describe('Session ID to continue an existing session.'),
+    timeout_minutes: z
+      .number()
+      .int()
+      .min(1)
+      .max(30)
+      .optional()
+      .describe('Override timeout in minutes (max: 30).'),
+    max_turns: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe('Override maximum turns for the agent.'),
+    retry_on_capacity: z
+      .boolean()
+      .optional()
+      .describe('Auto-retry on model capacity errors (429/503).'),
+    retry_attempts: z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .optional()
+      .describe('Number of retry attempts (default: 3).'),
   })
   .refine(
     (data) => {
@@ -98,13 +127,32 @@ class DelegateTaskInvocation extends BaseToolInvocation<
   }
 
   async execute(signal: AbortSignal): Promise<ToolResult> {
-    const { prompt, description, run_in_background, session_id, load_skills } =
-      this.params;
+    const {
+      prompt,
+      description,
+      run_in_background,
+      session_id,
+      load_skills,
+      subagent_type,
+    } = this.params;
 
     // Validate required parameters
     if (load_skills === undefined) {
       return this.errorResult(
         "'load_skills' parameter is REQUIRED. Pass an empty array if no skills needed.",
+      );
+    }
+
+    // Enforce background-only agents
+    if (
+      subagent_type &&
+      isBackgroundOnlyAgent(subagent_type) &&
+      !run_in_background
+    ) {
+      return this.errorResult(
+        `Agent '${subagent_type}' is BACKGROUND-ONLY. ` +
+          `Use run_in_background=true for parallel execution. ` +
+          `This agent is designed for long-running operations and should not block the main conversation.`,
       );
     }
 
@@ -338,6 +386,14 @@ Continue the conversation. The user's new message is provided as the task input.
       ? `${systemPrompt}\n\n## Loaded Skills\n\n${skillContent}`
       : systemPrompt;
 
+    // Get timeout/retry config from params or background-only defaults
+    const { timeout_minutes, max_turns } = this.params;
+    const bgDefaults = getBackgroundAgentDefaults(agent);
+
+    const effectiveTimeout =
+      timeout_minutes ?? bgDefaults?.timeoutMinutes ?? 30;
+    const effectiveMaxTurns = max_turns ?? bgDefaults?.maxTurns ?? 50;
+
     return {
       kind: 'local',
       name: `delegate-${agent}`,
@@ -364,8 +420,8 @@ Continue the conversation. The user's new message is provided as the task input.
         },
       },
       runConfig: {
-        maxTimeMinutes: 30,
-        maxTurns: 50,
+        maxTimeMinutes: effectiveTimeout,
+        maxTurns: effectiveMaxTurns,
       },
       // Use all available tools for the delegated agent
       toolConfig: undefined,

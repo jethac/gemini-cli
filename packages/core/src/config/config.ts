@@ -107,6 +107,7 @@ import type { Experiments } from '../code_assist/experiments/experiments.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { setGlobalProxy } from '../utils/fetch.js';
 import { SubagentTool } from '../agents/subagent-tool.js';
+import { isBackgroundOnlyAgent } from '../tools/delegate-task/background-only.js';
 import { getExperiments } from '../code_assist/experiments/experiments.js';
 import { ExperimentFlags } from '../code_assist/experiments/flagNames.js';
 import { debugLogger } from '../utils/debugLogger.js';
@@ -2013,6 +2014,15 @@ export class Config {
       for (const definition of definitions) {
         const isAllowed =
           !allowedTools || allowedTools.includes(definition.name);
+
+        // Skip background-only agents - they're only accessible via delegate_task
+        if (isBackgroundOnlyAgent(definition.name)) {
+          debugLogger.log(
+            `Skipping direct tool registration for background-only agent: ${definition.name}. ` +
+              `Use delegate_task(subagent_type="${definition.name}", run_in_background=true) instead.`,
+          );
+          continue;
+        }
 
         if (isAllowed) {
           try {

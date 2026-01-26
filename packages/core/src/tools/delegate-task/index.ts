@@ -16,6 +16,7 @@ export {
   BACKGROUND_CANCEL_TOOL_NAME,
   TASK_CATEGORIES,
   AGENT_TYPES,
+  THINKING_BUDGET,
   getDefaultCategoryConfigs,
   getDefaultAgentTypeConfigs,
   type TaskCategory,

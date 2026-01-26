@@ -19,13 +19,7 @@ import {
 } from './constants.js';
 import type { MessageBus } from '../../confirmation-bus/message-bus.js';
 import type { Config } from '../../config/config.js';
-
-// Mock MessageBus
-const createMockMessageBus = (): MessageBus => ({
-  publish: vi.fn().mockResolvedValue(undefined),
-  subscribe: vi.fn(),
-  unsubscribe: vi.fn(),
-});
+import { createMockMessageBus } from '../../test-utils/mock-message-bus.js';
 
 // Mock Config
 const createMockConfig = (overrides: Partial<Config> = {}): Config =>
@@ -139,57 +133,77 @@ describe('DelegateTaskTool', () => {
 describe('Category and Agent Configurations', () => {
   describe('getDefaultCategoryConfigs', () => {
     it('should return configs for all categories', () => {
-      const configs = getDefaultCategoryConfigs(false);
+      const configs = getDefaultCategoryConfigs();
       for (const category of TASK_CATEGORIES) {
         expect(configs[category]).toBeDefined();
         expect(configs[category].model).toBeDefined();
+        expect(configs[category].thinkingBudget).toBeDefined();
         expect(configs[category].description).toBeDefined();
       }
     });
 
-    it('should use flash model for visual-engineering', () => {
-      const configs = getDefaultCategoryConfigs(false);
-      expect(configs['visual-engineering'].model).toBe('gemini-2.5-flash');
-    });
-
-    it('should use pro model for ultrabrain', () => {
-      const configs = getDefaultCategoryConfigs(false);
-      expect(configs['ultrabrain'].model).toBe('gemini-2.5-pro');
-    });
-
-    it('should use flash-lite model for quick', () => {
-      const configs = getDefaultCategoryConfigs(false);
-      expect(configs['quick'].model).toBe('gemini-2.5-flash-lite');
-    });
-
-    it('should use preview models when enabled', () => {
-      const configs = getDefaultCategoryConfigs(true);
+    it('should always use Gemini 3 Flash for visual-engineering', () => {
+      const configs = getDefaultCategoryConfigs();
       expect(configs['visual-engineering'].model).toBe(
         'gemini-3-flash-preview',
       );
+    });
+
+    it('should always use Gemini 3 Pro for ultrabrain with max thinking', () => {
+      const configs = getDefaultCategoryConfigs();
       expect(configs['ultrabrain'].model).toBe('gemini-3-pro-preview');
+      expect(configs['ultrabrain'].thinkingBudget).toBe(32768);
+    });
+
+    it('should use Gemini 3 Flash for quick with minimal thinking', () => {
+      const configs = getDefaultCategoryConfigs();
+      expect(configs['quick'].model).toBe('gemini-3-flash-preview');
+      expect(configs['quick'].thinkingBudget).toBe(1024);
+    });
+
+    it('should have appropriate thinking budgets for all categories', () => {
+      const configs = getDefaultCategoryConfigs();
+      // Pro model categories should have higher thinking
+      expect(configs['ultrabrain'].thinkingBudget).toBeGreaterThan(
+        configs['quick'].thinkingBudget,
+      );
+      expect(configs['artistry'].thinkingBudget).toBeGreaterThan(
+        configs['quick'].thinkingBudget,
+      );
     });
   });
 
   describe('getDefaultAgentTypeConfigs', () => {
     it('should return configs for all agent types', () => {
-      const configs = getDefaultAgentTypeConfigs(false);
+      const configs = getDefaultAgentTypeConfigs();
       for (const agentType of AGENT_TYPES) {
         expect(configs[agentType]).toBeDefined();
         expect(configs[agentType].model).toBeDefined();
+        expect(configs[agentType].thinkingBudget).toBeDefined();
         expect(configs[agentType].description).toBeDefined();
         expect(configs[agentType].systemPrompt).toBeDefined();
       }
     });
 
-    it('should use flash model for sisyphus-junior', () => {
-      const configs = getDefaultAgentTypeConfigs(false);
-      expect(configs['sisyphus-junior'].model).toBe('gemini-2.5-flash');
+    it('should use Gemini 3 Flash for sisyphus-junior', () => {
+      const configs = getDefaultAgentTypeConfigs();
+      expect(configs['sisyphus-junior'].model).toBe('gemini-3-flash-preview');
     });
 
-    it('should use pro model for oracle', () => {
-      const configs = getDefaultAgentTypeConfigs(false);
-      expect(configs['oracle'].model).toBe('gemini-2.5-pro');
+    it('should use Gemini 3 Pro for oracle with max thinking', () => {
+      const configs = getDefaultAgentTypeConfigs();
+      expect(configs['oracle'].model).toBe('gemini-3-pro-preview');
+      expect(configs['oracle'].thinkingBudget).toBe(32768);
+    });
+
+    it('should use lower thinking for search agents', () => {
+      const configs = getDefaultAgentTypeConfigs();
+      expect(configs['explore'].thinkingBudget).toBeLessThan(
+        configs['oracle'].thinkingBudget,
+      );
+      expect(configs['librarian'].thinkingBudget).toBeLessThan(
+        configs['oracle'].thinkingBudget,
+      );
     });
   });
 });

@@ -7,9 +7,6 @@
 import {
   PREVIEW_GEMINI_FLASH_MODEL,
   PREVIEW_GEMINI_MODEL,
-  DEFAULT_GEMINI_FLASH_MODEL,
-  DEFAULT_GEMINI_MODEL,
-  DEFAULT_GEMINI_FLASH_LITE_MODEL,
 } from '../../config/models.js';
 
 // Re-export tool names from centralized location
@@ -18,6 +15,25 @@ export {
   BACKGROUND_OUTPUT_TOOL_NAME,
   BACKGROUND_CANCEL_TOOL_NAME,
 } from '../tool-names.js';
+
+/**
+ * Always use Gemini 3 models for agent orchestration.
+ * These provide the best performance for agentic workloads.
+ */
+const GEMINI_3_PRO = PREVIEW_GEMINI_MODEL; // 'gemini-3-pro-preview'
+const GEMINI_3_FLASH = PREVIEW_GEMINI_FLASH_MODEL; // 'gemini-3-flash-preview'
+
+/**
+ * Thinking budget presets for different task complexities.
+ * Higher values allow more reasoning tokens before responding.
+ */
+export const THINKING_BUDGET = {
+  MAX: 32768, // Maximum thinking for complex reasoning
+  HIGH: 16384, // High thinking for creative/planning tasks
+  MODERATE: 8192, // Balanced thinking for general tasks
+  LOW: 4096, // Low thinking for search/lookup tasks
+  MINIMAL: 1024, // Minimal thinking for trivial tasks
+} as const;
 
 /**
  * Available task categories for routing.
@@ -51,11 +67,13 @@ export const AGENT_TYPES = [
 export type AgentType = (typeof AGENT_TYPES)[number];
 
 /**
- * Configuration for a category including model and description.
+ * Configuration for a category including model, thinking budget, and description.
  */
 export interface CategoryConfig {
   /** The Gemini model to use for this category */
   model: string;
+  /** Thinking budget (reasoning tokens) for this category */
+  thinkingBudget: number;
   /** Human-readable description of the category */
   description: string;
   /** Optional prompt append for category-specific instructions */
@@ -63,11 +81,13 @@ export interface CategoryConfig {
 }
 
 /**
- * Configuration for an agent type including model and description.
+ * Configuration for an agent type including model, thinking budget, and description.
  */
 export interface AgentTypeConfig {
   /** The Gemini model to use for this agent type */
   model: string;
+  /** Thinking budget (reasoning tokens) for this agent type */
+  thinkingBudget: number;
   /** Human-readable description of the agent type */
   description: string;
   /** The system prompt for this agent type */
@@ -75,118 +95,123 @@ export interface AgentTypeConfig {
 }
 
 /**
- * Default category configurations mapping to Gemini models.
+ * Default category configurations mapping to Gemini 3 models with thinking budgets.
  *
- * Based on Gemini model characteristics:
+ * Always uses Gemini 3 series for best agentic performance:
+ * - Gemini 3 Pro: Best for complex reasoning, creative tasks, architecture
  * - Gemini 3 Flash: Best coding performance (78% SWE-bench), 3x faster, 75% cheaper
- * - Gemini 3 Pro: Best for creative/complex tasks, main conversation model
- * - Gemini 2.5 Flash: Large context (1M), cost-effective for search
- * - Gemini 2.5 Flash-Lite: Ultra-low cost for trivial tasks
+ *
+ * Thinking budgets control reasoning depth before responding.
  */
-export function getDefaultCategoryConfigs(
-  previewFeaturesEnabled: boolean,
-): Record<TaskCategory, CategoryConfig> {
-  const flashModel = previewFeaturesEnabled
-    ? PREVIEW_GEMINI_FLASH_MODEL
-    : DEFAULT_GEMINI_FLASH_MODEL;
-  const proModel = previewFeaturesEnabled
-    ? PREVIEW_GEMINI_MODEL
-    : DEFAULT_GEMINI_MODEL;
-
+export function getDefaultCategoryConfigs(): Record<
+  TaskCategory,
+  CategoryConfig
+> {
   return {
-    'visual-engineering': {
-      model: flashModel,
-      description: 'Frontend, UI/UX, design, styling, animation',
-      promptAppend: VISUAL_ENGINEERING_PROMPT_APPEND,
-    },
     ultrabrain: {
-      model: proModel,
+      model: GEMINI_3_PRO,
+      thinkingBudget: THINKING_BUDGET.MAX,
       description:
         'Deep logical reasoning, complex architecture decisions requiring extensive analysis',
       promptAppend: ULTRABRAIN_PROMPT_APPEND,
     },
     artistry: {
-      model: proModel,
+      model: GEMINI_3_PRO,
+      thinkingBudget: THINKING_BUDGET.HIGH,
       description: 'Highly creative/artistic tasks, novel ideas',
     },
-    quick: {
-      model: DEFAULT_GEMINI_FLASH_LITE_MODEL,
-      description:
-        'Trivial tasks - single file changes, typo fixes, simple modifications',
-    },
-    'unspecified-low': {
-      model: flashModel,
-      description: "Tasks that don't fit other categories, low effort required",
-    },
     'unspecified-high': {
-      model: proModel,
+      model: GEMINI_3_PRO,
+      thinkingBudget: THINKING_BUDGET.HIGH,
       description:
         "Tasks that don't fit other categories, high effort required",
     },
+    'visual-engineering': {
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.MODERATE,
+      description: 'Frontend, UI/UX, design, styling, animation',
+      promptAppend: VISUAL_ENGINEERING_PROMPT_APPEND,
+    },
     writing: {
-      model: DEFAULT_GEMINI_FLASH_MODEL,
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.MODERATE,
       description: 'Documentation, prose, technical writing',
+    },
+    'unspecified-low': {
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.LOW,
+      description: "Tasks that don't fit other categories, low effort required",
+    },
+    quick: {
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.MINIMAL,
+      description:
+        'Trivial tasks - single file changes, typo fixes, simple modifications',
     },
   };
 }
 
 /**
- * Default agent type configurations.
+ * Default agent type configurations with Gemini 3 models and thinking budgets.
+ *
+ * Each agent is tuned for its specific role with appropriate model and thinking depth.
  */
-export function getDefaultAgentTypeConfigs(
-  previewFeaturesEnabled: boolean,
-): Record<AgentType, AgentTypeConfig> {
-  const flashModel = previewFeaturesEnabled
-    ? PREVIEW_GEMINI_FLASH_MODEL
-    : DEFAULT_GEMINI_FLASH_MODEL;
-  const proModel = previewFeaturesEnabled
-    ? PREVIEW_GEMINI_MODEL
-    : DEFAULT_GEMINI_MODEL;
-
+export function getDefaultAgentTypeConfigs(): Record<
+  AgentType,
+  AgentTypeConfig
+> {
   return {
-    'sisyphus-junior': {
-      model: flashModel,
-      description:
-        'Focused task executor. Executes delegated tasks autonomously.',
-      systemPrompt: SISYPHUS_JUNIOR_SYSTEM_PROMPT,
-    },
     oracle: {
-      model: proModel,
+      model: GEMINI_3_PRO,
+      thinkingBudget: THINKING_BUDGET.MAX,
       description:
         'Architecture consultant. Read-only high-IQ reasoning for debugging and design.',
       systemPrompt: ORACLE_SYSTEM_PROMPT,
     },
-    explore: {
-      model: flashModel,
-      description:
-        'Codebase search agent. Contextual grep for codebases with thorough analysis.',
-      systemPrompt: EXPLORE_SYSTEM_PROMPT,
-    },
-    librarian: {
-      model: DEFAULT_GEMINI_FLASH_MODEL,
-      description:
-        'Documentation search agent. Multi-repository analysis and external documentation lookup.',
-      systemPrompt: LIBRARIAN_SYSTEM_PROMPT,
-    },
     prometheus: {
-      model: proModel,
+      model: GEMINI_3_PRO,
+      thinkingBudget: THINKING_BUDGET.HIGH,
       description: 'Strategic planner. Complex planning and task breakdown.',
       systemPrompt: PROMETHEUS_SYSTEM_PROMPT,
     },
+    'sisyphus-junior': {
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.MODERATE,
+      description:
+        'Focused task executor. Executes delegated tasks autonomously.',
+      systemPrompt: SISYPHUS_JUNIOR_SYSTEM_PROMPT,
+    },
     metis: {
-      model: flashModel,
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.MODERATE,
       description:
         'Gap analyzer. Identifies hidden intentions, ambiguities, and failure points.',
       systemPrompt: METIS_SYSTEM_PROMPT,
     },
     momus: {
-      model: flashModel,
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.MODERATE,
       description:
         'Plan reviewer. Evaluates work plans against rigorous standards.',
       systemPrompt: MOMUS_SYSTEM_PROMPT,
     },
+    explore: {
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.LOW,
+      description:
+        'Codebase search agent. Contextual grep for codebases with thorough analysis.',
+      systemPrompt: EXPLORE_SYSTEM_PROMPT,
+    },
+    librarian: {
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.LOW,
+      description:
+        'Documentation search agent. Multi-repository analysis and external documentation lookup.',
+      systemPrompt: LIBRARIAN_SYSTEM_PROMPT,
+    },
     'multimodal-looker': {
-      model: flashModel,
+      model: GEMINI_3_FLASH,
+      thinkingBudget: THINKING_BUDGET.LOW,
       description:
         'Media analyzer. Analyzes PDFs, images, diagrams for information extraction.',
       systemPrompt: MULTIMODAL_LOOKER_SYSTEM_PROMPT,

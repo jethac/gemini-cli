@@ -117,8 +117,9 @@ class DelegateTaskInvocation extends BaseToolInvocation<
       return this.errorResult(skillContent.error);
     }
 
-    // Determine target agent and model
-    const { agent, model, systemPrompt } = this.resolveAgentAndModel();
+    // Determine target agent, model, and thinking budget
+    const { agent, model, thinkingBudget, systemPrompt } =
+      this.resolveAgentAndModel();
 
     // Handle session continuation
     if (session_id) {
@@ -133,6 +134,7 @@ class DelegateTaskInvocation extends BaseToolInvocation<
     const agentDefinition = this.createAgentDefinition(
       agent,
       model,
+      thinkingBudget,
       systemPrompt,
       skillContent.content,
     );
@@ -183,40 +185,43 @@ ${skill.body}
   private resolveAgentAndModel(): {
     agent: string;
     model: string;
+    thinkingBudget: number;
     systemPrompt: string;
   } {
     const { category, subagent_type } = this.params;
-    const previewEnabled = this.config.getPreviewFeatures() ?? false;
 
     if (category) {
-      const categoryConfigs = getDefaultCategoryConfigs(previewEnabled);
+      const categoryConfigs = getDefaultCategoryConfigs();
       const config = categoryConfigs[category];
-      const agentConfigs = getDefaultAgentTypeConfigs(previewEnabled);
+      const agentConfigs = getDefaultAgentTypeConfigs();
       const defaultAgent = agentConfigs['sisyphus-junior'];
 
       return {
         agent: 'sisyphus-junior',
         model: config.model,
+        thinkingBudget: config.thinkingBudget,
         systemPrompt: defaultAgent.systemPrompt + (config.promptAppend || ''),
       };
     }
 
     if (subagent_type) {
-      const agentConfigs = getDefaultAgentTypeConfigs(previewEnabled);
+      const agentConfigs = getDefaultAgentTypeConfigs();
       const config = agentConfigs[subagent_type];
       return {
         agent: subagent_type,
         model: config.model,
+        thinkingBudget: config.thinkingBudget,
         systemPrompt: config.systemPrompt,
       };
     }
 
-    // Default to sisyphus-junior with flash model
-    const agentConfigs = getDefaultAgentTypeConfigs(previewEnabled);
+    // Default to sisyphus-junior
+    const agentConfigs = getDefaultAgentTypeConfigs();
     const defaultAgent = agentConfigs['sisyphus-junior'];
     return {
       agent: 'sisyphus-junior',
       model: defaultAgent.model,
+      thinkingBudget: defaultAgent.thinkingBudget,
       systemPrompt: defaultAgent.systemPrompt,
     };
   }
@@ -236,6 +241,7 @@ ${skill.body}
   private createAgentDefinition(
     agent: string,
     model: string,
+    thinkingBudget: number,
     systemPrompt: string,
     skillContent?: string,
   ): LocalAgentDefinition {
@@ -262,6 +268,11 @@ ${skill.body}
       },
       modelConfig: {
         model,
+        generateContentConfig: {
+          thinkingConfig: {
+            thinkingBudget,
+          },
+        },
       },
       runConfig: {
         maxTimeMinutes: 30,

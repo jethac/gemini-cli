@@ -24,6 +24,9 @@ export const GET_INTERNAL_DOCS_TOOL_NAME = 'get_internal_docs';
 export const ACTIVATE_SKILL_TOOL_NAME = 'activate_skill';
 export const EDIT_TOOL_NAMES = new Set([EDIT_TOOL_NAME, WRITE_FILE_TOOL_NAME]);
 export const ASK_USER_TOOL_NAME = 'ask_user';
+export const DELEGATE_TASK_TOOL_NAME = 'delegate_task';
+export const BACKGROUND_OUTPUT_TOOL_NAME = 'background_output';
+export const BACKGROUND_CANCEL_TOOL_NAME = 'background_cancel';
 
 /** Prefix used for tools discovered via the toolDiscoveryCommand. */
 export const DISCOVERED_TOOL_PREFIX = 'discovered_tool_';
@@ -46,6 +49,9 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   MEMORY_TOOL_NAME,
   ACTIVATE_SKILL_TOOL_NAME,
   ASK_USER_TOOL_NAME,
+  DELEGATE_TASK_TOOL_NAME,
+  BACKGROUND_OUTPUT_TOOL_NAME,
+  BACKGROUND_CANCEL_TOOL_NAME,
 ] as const;
 
 /**

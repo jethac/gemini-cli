@@ -31,4 +31,6 @@ export type {
   BackgroundCancelParams,
   BackgroundTaskInfo,
   BackgroundTaskStatus,
+  SessionContext,
+  SessionMessage,
 } from './types.js';

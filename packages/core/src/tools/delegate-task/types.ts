@@ -134,6 +134,60 @@ export type BackgroundTaskStatus =
   | 'cancelled';
 
 /**
+ * A message in a session's conversation history.
+ */
+export interface SessionMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
+/**
+ * Session context for continuation.
+ */
+export interface SessionContext {
+  /**
+   * Session identifier.
+   */
+  session_id: string;
+
+  /**
+   * The agent type used in this session.
+   */
+  agent: string;
+
+  /**
+   * The model used in this session.
+   */
+  model: string;
+
+  /**
+   * Thinking budget for this session.
+   */
+  thinkingBudget: number;
+
+  /**
+   * System prompt used in this session.
+   */
+  systemPrompt: string;
+
+  /**
+   * Conversation history.
+   */
+  messages: SessionMessage[];
+
+  /**
+   * When the session was created.
+   */
+  created_at: Date;
+
+  /**
+   * When the session was last updated.
+   */
+  last_updated: Date;
+}
+
+/**
  * Information about a background task.
  */
 export interface BackgroundTaskInfo {

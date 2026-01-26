@@ -429,3 +429,254 @@ describe('BackgroundCancelTool', () => {
     });
   });
 });
+
+describe('Session Management', () => {
+  let manager: BackgroundTaskManager;
+
+  beforeEach(() => {
+    BackgroundTaskManager.resetInstance();
+    manager = BackgroundTaskManager.getInstance();
+  });
+
+  afterEach(() => {
+    BackgroundTaskManager.resetInstance();
+  });
+
+  describe('createSession', () => {
+    it('should create session with unique ID', () => {
+      const session1 = manager.createSession(
+        'oracle',
+        'gemini-3-pro-preview',
+        32768,
+        'You are an oracle',
+      );
+      const session2 = manager.createSession(
+        'explore',
+        'gemini-3-flash-preview',
+        4096,
+        'You are an explorer',
+      );
+
+      expect(session1.session_id).toBeDefined();
+      expect(session2.session_id).toBeDefined();
+      expect(session1.session_id).not.toBe(session2.session_id);
+      expect(session1.session_id).toMatch(/^ses_/);
+    });
+
+    it('should store session configuration correctly', () => {
+      const session = manager.createSession(
+        'oracle',
+        'gemini-3-pro-preview',
+        32768,
+        'You are an oracle',
+      );
+
+      expect(session.agent).toBe('oracle');
+      expect(session.model).toBe('gemini-3-pro-preview');
+      expect(session.thinkingBudget).toBe(32768);
+      expect(session.systemPrompt).toBe('You are an oracle');
+      expect(session.messages).toEqual([]);
+      expect(session.created_at).toBeInstanceOf(Date);
+      expect(session.last_updated).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('getSession', () => {
+    it('should retrieve existing session', () => {
+      const created = manager.createSession(
+        'oracle',
+        'gemini-3-pro-preview',
+        32768,
+        'System prompt',
+      );
+      const retrieved = manager.getSession(created.session_id);
+
+      expect(retrieved).toBeDefined();
+      expect(retrieved?.session_id).toBe(created.session_id);
+      expect(retrieved?.agent).toBe('oracle');
+    });
+
+    it('should return undefined for non-existent session', () => {
+      const session = manager.getSession('non_existent_session');
+      expect(session).toBeUndefined();
+    });
+  });
+
+  describe('addSessionMessage', () => {
+    it('should add messages to session', () => {
+      const session = manager.createSession(
+        'oracle',
+        'gemini-3-pro-preview',
+        32768,
+        'System prompt',
+      );
+
+      manager.addSessionMessage(session.session_id, 'user', 'Hello, oracle!');
+      manager.addSessionMessage(
+        session.session_id,
+        'assistant',
+        'Hello! How can I help you?',
+      );
+
+      const messages = manager.getSessionMessages(session.session_id);
+      expect(messages).toHaveLength(2);
+      expect(messages[0].role).toBe('user');
+      expect(messages[0].content).toBe('Hello, oracle!');
+      expect(messages[1].role).toBe('assistant');
+      expect(messages[1].content).toBe('Hello! How can I help you?');
+    });
+
+    it('should update last_updated timestamp', async () => {
+      const session = manager.createSession(
+        'oracle',
+        'gemini-3-pro-preview',
+        32768,
+        'System prompt',
+      );
+
+      const originalUpdated = session.last_updated.getTime();
+
+      // Small delay to ensure timestamp difference
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      manager.addSessionMessage(session.session_id, 'user', 'Test message');
+
+      const updated = manager.getSession(session.session_id);
+      expect(updated?.last_updated.getTime()).toBeGreaterThan(originalUpdated);
+    });
+
+    it('should not throw for non-existent session', () => {
+      expect(() => {
+        manager.addSessionMessage('non_existent', 'user', 'Test message');
+      }).not.toThrow();
+    });
+  });
+
+  describe('getSessionMessages', () => {
+    it('should return empty array for non-existent session', () => {
+      const messages = manager.getSessionMessages('non_existent');
+      expect(messages).toEqual([]);
+    });
+
+    it('should return messages in order', () => {
+      const session = manager.createSession(
+        'oracle',
+        'gemini-3-pro-preview',
+        32768,
+        'System prompt',
+      );
+
+      manager.addSessionMessage(session.session_id, 'user', 'First');
+      manager.addSessionMessage(session.session_id, 'assistant', 'Second');
+      manager.addSessionMessage(session.session_id, 'user', 'Third');
+
+      const messages = manager.getSessionMessages(session.session_id);
+      expect(messages[0].content).toBe('First');
+      expect(messages[1].content).toBe('Second');
+      expect(messages[2].content).toBe('Third');
+    });
+  });
+
+  describe('getSessionByTaskId', () => {
+    it('should return session linked to task', () => {
+      const task = manager.createTask('Test task', 'oracle');
+      const session = manager.createSession(
+        'oracle',
+        'gemini-3-pro-preview',
+        32768,
+        'System prompt',
+      );
+
+      manager.linkTaskToSession(task.task_id, session.session_id);
+
+      const foundSession = manager.getSessionByTaskId(task.task_id);
+      expect(foundSession).toBeDefined();
+      expect(foundSession?.session_id).toBe(session.session_id);
+    });
+
+    it('should return undefined for task without session', () => {
+      const task = manager.createTask('Test task', 'oracle');
+      // Don't link to any session
+
+      const foundSession = manager.getSessionByTaskId(task.task_id);
+      // Task has a default session_id but no matching session in the sessions map
+      expect(foundSession).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent task', () => {
+      const session = manager.getSessionByTaskId('non_existent_task');
+      expect(session).toBeUndefined();
+    });
+  });
+
+  describe('linkTaskToSession', () => {
+    it('should link task to session', () => {
+      const task = manager.createTask('Test task', 'oracle');
+      const session = manager.createSession(
+        'oracle',
+        'gemini-3-pro-preview',
+        32768,
+        'System prompt',
+      );
+
+      const originalSessionId = task.session_id;
+      manager.linkTaskToSession(task.task_id, session.session_id);
+
+      const updatedTask = manager.getTask(task.task_id);
+      expect(updatedTask?.session_id).toBe(session.session_id);
+      expect(updatedTask?.session_id).not.toBe(originalSessionId);
+    });
+
+    it('should not throw for non-existent task', () => {
+      expect(() => {
+        manager.linkTaskToSession('non_existent', 'some_session');
+      }).not.toThrow();
+    });
+  });
+
+  describe('cleanupSessions', () => {
+    it('should remove old sessions', async () => {
+      const session = manager.createSession(
+        'oracle',
+        'gemini-3-pro-preview',
+        32768,
+        'System prompt',
+      );
+
+      // Manually backdate the session for testing
+      const oldDate = new Date(Date.now() - 7200000); // 2 hours ago
+      const storedSession = manager.getSession(session.session_id);
+      if (storedSession) {
+        storedSession.last_updated = oldDate;
+      }
+
+      const count = manager.cleanupSessions(3600000); // 1 hour max age
+
+      expect(count).toBe(1);
+      expect(manager.getSession(session.session_id)).toBeUndefined();
+    });
+
+    it('should keep recent sessions', () => {
+      const session = manager.createSession(
+        'oracle',
+        'gemini-3-pro-preview',
+        32768,
+        'System prompt',
+      );
+
+      const count = manager.cleanupSessions(3600000); // 1 hour max age
+
+      expect(count).toBe(0);
+      expect(manager.getSession(session.session_id)).toBeDefined();
+    });
+  });
+
+  describe('task creates session_id', () => {
+    it('should include session_id in newly created tasks', () => {
+      const task = manager.createTask('Test task', 'oracle');
+
+      expect(task.session_id).toBeDefined();
+      expect(task.session_id).toMatch(/^ses_/);
+    });
+  });
+});

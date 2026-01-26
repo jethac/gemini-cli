@@ -126,9 +126,19 @@ class DelegateTaskInvocation extends BaseToolInvocation<
       return this.handleSessionContinuation(
         session_id,
         prompt,
+        signal,
         skillContent.content,
       );
     }
+
+    // Create a new session for this task
+    const taskManager = BackgroundTaskManager.getInstance();
+    const session = taskManager.createSession(
+      agent,
+      model,
+      thinkingBudget,
+      systemPrompt,
+    );
 
     // Create agent definition
     const agentDefinition = this.createAgentDefinition(
@@ -141,9 +151,19 @@ class DelegateTaskInvocation extends BaseToolInvocation<
 
     // Execute based on run_in_background
     if (run_in_background) {
-      return this.executeBackground(agentDefinition, description, prompt);
+      return this.executeBackground(
+        agentDefinition,
+        description,
+        prompt,
+        session.session_id,
+      );
     } else {
-      return this.executeSync(agentDefinition, prompt, signal);
+      return this.executeSync(
+        agentDefinition,
+        prompt,
+        signal,
+        session.session_id,
+      );
     }
   }
 
@@ -226,16 +246,81 @@ ${skill.body}
     };
   }
 
-  private handleSessionContinuation(
-    _sessionId: string,
-    _prompt: string,
-    _skillContent?: string,
-  ): ToolResult {
-    // TODO: Implement session continuation
-    // For now, return an error indicating this feature is not yet implemented
-    return this.errorResult(
-      'Session continuation is not yet implemented. Please start a new task without session_id.',
+  private async handleSessionContinuation(
+    sessionId: string,
+    prompt: string,
+    signal: AbortSignal,
+    skillContent?: string,
+  ): Promise<ToolResult> {
+    const taskManager = BackgroundTaskManager.getInstance();
+    const session = taskManager.getSession(sessionId);
+
+    if (!session) {
+      return this.errorResult(
+        `Session "${sessionId}" not found. Start a new task without session_id.`,
+      );
+    }
+
+    // Add the new user message to session history
+    taskManager.addSessionMessage(sessionId, 'user', prompt);
+
+    // Build conversation context from session history
+    const conversationContext = session.messages
+      .map(
+        (msg) =>
+          `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`,
+      )
+      .join('\n\n');
+
+    // Create agent definition with conversation context
+    const agentDefinition = this.createAgentDefinition(
+      session.agent,
+      session.model,
+      session.thinkingBudget,
+      session.systemPrompt,
+      skillContent,
     );
+
+    // Modify the system prompt to include conversation history
+    const systemPromptWithHistory = `${agentDefinition.promptConfig.systemPrompt}
+
+## Previous Conversation
+${conversationContext}
+
+## Current Request
+Continue the conversation. The user's new message is provided as the task input.`;
+
+    agentDefinition.promptConfig.systemPrompt = systemPromptWithHistory;
+
+    try {
+      const executor = await LocalAgentExecutor.create(
+        agentDefinition,
+        this.config,
+      );
+
+      const inputs: AgentInputs = { task: prompt };
+      const output = await executor.run(inputs, signal);
+
+      // Add the assistant response to session history
+      taskManager.addSessionMessage(sessionId, 'assistant', output.result);
+
+      const result: DelegateTaskResult = {
+        session_id: sessionId,
+        status: 'completed',
+        agent: session.agent,
+        model: session.model,
+        result: output.result,
+      };
+
+      return {
+        llmContent: this.formatResult(result),
+        returnDisplay: `Session ${sessionId} continued`,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      return this.errorResult(`Session continuation failed: ${errorMessage}`);
+    }
   }
 
   private createAgentDefinition(
@@ -287,7 +372,13 @@ ${skill.body}
     agentDefinition: LocalAgentDefinition,
     prompt: string,
     signal: AbortSignal,
+    sessionId: string,
   ): Promise<ToolResult> {
+    const taskManager = BackgroundTaskManager.getInstance();
+
+    // Record the user message
+    taskManager.addSessionMessage(sessionId, 'user', prompt);
+
     try {
       const executor = await LocalAgentExecutor.create(
         agentDefinition,
@@ -297,8 +388,11 @@ ${skill.body}
       const inputs: AgentInputs = { task: prompt };
       const output = await executor.run(inputs, signal);
 
+      // Record the assistant response
+      taskManager.addSessionMessage(sessionId, 'assistant', output.result);
+
       const result: DelegateTaskResult = {
-        session_id: `ses_${Date.now().toString(36)}`,
+        session_id: sessionId,
         status: 'completed',
         agent: agentDefinition.name,
         model: agentDefinition.modelConfig.model ?? 'unknown',
@@ -320,10 +414,18 @@ ${skill.body}
     agentDefinition: LocalAgentDefinition,
     description: string,
     prompt: string,
+    sessionId: string,
   ): ToolResult {
     const taskManager = BackgroundTaskManager.getInstance();
     const taskInfo = taskManager.createTask(description, agentDefinition.name);
+
+    // Link the task to the existing session
+    taskManager.linkTaskToSession(taskInfo.task_id, sessionId);
+
     const signal = taskManager.getAbortSignal(taskInfo.task_id)!;
+
+    // Record the user message
+    taskManager.addSessionMessage(sessionId, 'user', prompt);
 
     // Start the task asynchronously
     const taskPromise = (async (): Promise<DelegateTaskResult> => {
@@ -338,11 +440,14 @@ ${skill.body}
         const inputs: AgentInputs = { task: prompt };
         const output = await executor.run(inputs, signal);
 
+        // Record the assistant response
+        taskManager.addSessionMessage(sessionId, 'assistant', output.result);
+
         taskManager.completeTask(taskInfo.task_id, output.result);
 
         return {
           task_id: taskInfo.task_id,
-          session_id: taskInfo.session_id,
+          session_id: sessionId,
           status: 'completed',
           agent: agentDefinition.name,
           model: agentDefinition.modelConfig.model ?? 'unknown',
@@ -355,7 +460,7 @@ ${skill.body}
 
         return {
           task_id: taskInfo.task_id,
-          session_id: taskInfo.session_id,
+          session_id: sessionId,
           status: 'failed',
           agent: agentDefinition.name,
           model: agentDefinition.modelConfig.model ?? 'unknown',
@@ -368,7 +473,7 @@ ${skill.body}
 
     const result: DelegateTaskResult = {
       task_id: taskInfo.task_id,
-      session_id: taskInfo.session_id,
+      session_id: sessionId,
       status: 'running',
       agent: agentDefinition.name,
       model: agentDefinition.modelConfig.model ?? 'unknown',
@@ -384,7 +489,8 @@ Agent: ${result.agent}
 Model: ${result.model}
 Status: ${result.status}
 
-Use \`background_output\` with task_id="${result.task_id}" to check progress or get results.`,
+Use \`background_output\` with task_id="${result.task_id}" to check progress or get results.
+Use \`session_id="${result.session_id}"\` in a future delegate_task call to continue this conversation.`,
       returnDisplay: `Background task started: ${description}`,
     };
   }

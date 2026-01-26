@@ -9,6 +9,8 @@ import type {
   BackgroundTaskInfo,
   BackgroundTaskStatus,
   DelegateTaskResult,
+  SessionContext,
+  SessionMessage,
 } from './types.js';
 
 /**
@@ -23,6 +25,7 @@ export class BackgroundTaskManager {
   private tasks: Map<string, BackgroundTaskInfo> = new Map();
   private abortControllers: Map<string, AbortController> = new Map();
   private taskPromises: Map<string, Promise<DelegateTaskResult>> = new Map();
+  private sessions: Map<string, SessionContext> = new Map();
 
   private constructor() {}
 
@@ -228,6 +231,110 @@ export class BackgroundTaskManager {
           this.taskPromises.delete(taskId);
           count++;
         }
+      }
+    }
+
+    return count;
+  }
+
+  // ============================================================================
+  // Session Management
+  // ============================================================================
+
+  /**
+   * Creates a new session context.
+   */
+  createSession(
+    agent: string,
+    model: string,
+    thinkingBudget: number,
+    systemPrompt: string,
+  ): SessionContext {
+    const sessionId = `ses_${randomUUID().slice(0, 8)}`;
+    const now = new Date();
+
+    const session: SessionContext = {
+      session_id: sessionId,
+      agent,
+      model,
+      thinkingBudget,
+      systemPrompt,
+      messages: [],
+      created_at: now,
+      last_updated: now,
+    };
+
+    this.sessions.set(sessionId, session);
+    return session;
+  }
+
+  /**
+   * Gets a session by ID.
+   */
+  getSession(sessionId: string): SessionContext | undefined {
+    return this.sessions.get(sessionId);
+  }
+
+  /**
+   * Adds a message to a session's history.
+   */
+  addSessionMessage(
+    sessionId: string,
+    role: 'user' | 'assistant',
+    content: string,
+  ): void {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.messages.push({
+        role,
+        content,
+        timestamp: new Date(),
+      });
+      session.last_updated = new Date();
+    }
+  }
+
+  /**
+   * Gets the conversation history for a session.
+   */
+  getSessionMessages(sessionId: string): SessionMessage[] {
+    const session = this.sessions.get(sessionId);
+    return session?.messages ?? [];
+  }
+
+  /**
+   * Finds a session by task_id (looks up the task's session_id).
+   */
+  getSessionByTaskId(taskId: string): SessionContext | undefined {
+    const task = this.tasks.get(taskId);
+    if (task) {
+      return this.sessions.get(task.session_id);
+    }
+    return undefined;
+  }
+
+  /**
+   * Links a task to an existing session.
+   */
+  linkTaskToSession(taskId: string, sessionId: string): void {
+    const task = this.tasks.get(taskId);
+    if (task) {
+      task.session_id = sessionId;
+    }
+  }
+
+  /**
+   * Cleans up old sessions.
+   */
+  cleanupSessions(maxAgeMs: number = 3600000): number {
+    const now = Date.now();
+    let count = 0;
+
+    for (const [sessionId, session] of this.sessions) {
+      const age = now - session.last_updated.getTime();
+      if (age > maxAgeMs) {
+        this.sessions.delete(sessionId);
+        count++;
       }
     }
 

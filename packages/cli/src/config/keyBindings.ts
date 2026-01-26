@@ -83,6 +83,7 @@ export enum Command {
   UNFOCUS_SHELL_INPUT = 'app.unfocusShellInput',
   CLEAR_SCREEN = 'app.clearScreen',
   RESTART_APP = 'app.restart',
+  SHOW_BACKGROUND_TASKS = 'app.showBackgroundTasks',
 }
 
 /**
@@ -258,6 +259,7 @@ export const defaultKeyBindings: KeyBindingConfig = {
   [Command.UNFOCUS_SHELL_INPUT]: [{ key: 'tab' }],
   [Command.CLEAR_SCREEN]: [{ key: 'l', ctrl: true }],
   [Command.RESTART_APP]: [{ key: 'r' }],
+  [Command.SHOW_BACKGROUND_TASKS]: [{ key: 't', alt: true }],
 };
 
 interface CommandCategory {
@@ -365,6 +367,7 @@ export const commandCategories: readonly CommandCategory[] = [
       Command.UNFOCUS_SHELL_INPUT,
       Command.CLEAR_SCREEN,
       Command.RESTART_APP,
+      Command.SHOW_BACKGROUND_TASKS,
     ],
   },
 ];
@@ -453,4 +456,5 @@ export const commandDescriptions: Readonly<Record<Command, string>> = {
   [Command.UNFOCUS_SHELL_INPUT]: 'Focus the Gemini input from the shell input.',
   [Command.CLEAR_SCREEN]: 'Clear the terminal screen and redraw the UI.',
   [Command.RESTART_APP]: 'Restart the application.',
+  [Command.SHOW_BACKGROUND_TASKS]: 'Show background task status.',
 };

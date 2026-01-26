@@ -99,6 +99,7 @@ export interface UIState {
   isTrustedFolder: boolean | undefined;
   constrainHeight: boolean;
   showErrorDetails: boolean;
+  backgroundTasksHidden: boolean;
   filteredConsoleMessages: ConsoleMessageItem[];
   ideContextState: IdeContext | undefined;
   renderMarkdown: boolean;

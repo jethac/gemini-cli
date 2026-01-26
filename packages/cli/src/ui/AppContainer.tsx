@@ -1139,6 +1139,8 @@ Logging in with Google... Restarting Gemini CLI to continue.
 
   const [showErrorDetails, setShowErrorDetails] = useState<boolean>(false);
   const [showFullTodos, setShowFullTodos] = useState<boolean>(false);
+  const [backgroundTasksHidden, setBackgroundTasksHidden] =
+    useState<boolean>(false);
   const [renderMarkdown, setRenderMarkdown] = useState<boolean>(true);
 
   const [ctrlCPressCount, setCtrlCPressCount] = useState(0);
@@ -1377,6 +1379,15 @@ Logging in with Google... Restarting Gemini CLI to continue.
       ) {
         // eslint-disable-next-line @typescript-eslint/no-floating-promises
         handleSlashCommand('/ide status');
+      } else if (keyMatchers[Command.SHOW_BACKGROUND_TASKS](key)) {
+        // Toggle background tasks visibility
+        setBackgroundTasksHidden((prev) => {
+          const newValue = !prev;
+          handleWarning(
+            newValue ? 'Background tasks hidden' : 'Background tasks visible',
+          );
+          return newValue;
+        });
       } else if (
         keyMatchers[Command.SHOW_MORE_LINES](key) &&
         !enteringConstrainHeightMode
@@ -1671,6 +1682,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
       constrainHeight,
       showErrorDetails,
       showFullTodos,
+      backgroundTasksHidden,
       filteredConsoleMessages,
       ideContextState,
       renderMarkdown,
@@ -1767,6 +1779,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
       constrainHeight,
       showErrorDetails,
       showFullTodos,
+      backgroundTasksHidden,
       filteredConsoleMessages,
       ideContextState,
       renderMarkdown,

@@ -18,6 +18,7 @@ import { CopyModeWarning } from '../components/CopyModeWarning.js';
 import { ToolConfirmationQueue } from '../components/ToolConfirmationQueue.js';
 import { useConfirmingTool } from '../hooks/useConfirmingTool.js';
 import { useConfig } from '../contexts/ConfigContext.js';
+import { BackgroundTasksStatus } from '../components/BackgroundTasksStatus.js';
 
 export const DefaultAppLayout: React.FC = () => {
   const uiState = useUIState();
@@ -56,6 +57,7 @@ export const DefaultAppLayout: React.FC = () => {
         flexShrink={0}
         flexGrow={0}
       >
+        <BackgroundTasksStatus forceHidden={uiState.backgroundTasksHidden} />
         <Notifications />
         <CopyModeWarning />
 

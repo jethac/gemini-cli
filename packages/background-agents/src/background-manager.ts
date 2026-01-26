@@ -16,6 +16,7 @@ import type {
   AgentToolRestrictions,
 } from './types.js';
 import { DEFAULT_AGENT_RESTRICTIONS } from './types.js';
+import { coreEvents } from '@google/gemini-cli-core';
 
 /**
  * Default timing constants.
@@ -115,6 +116,9 @@ export class BackgroundManager {
     const queue = this.queuesByKey.get(concurrencyKey) ?? [];
     queue.push({ task, input });
     this.queuesByKey.set(concurrencyKey, queue);
+
+    // Emit UI events for new task
+    this.emitTaskUIEvents(task);
 
     // Trigger processing (fire-and-forget)
     void this.processKey(concurrencyKey);
@@ -362,6 +366,9 @@ export class BackgroundManager {
     task.startedAt = new Date();
     task.lastActivityAt = new Date();
 
+    // Emit UI events for task starting
+    this.emitTaskUIEvents(task);
+
     try {
       // Simulate task execution (in real implementation, this would
       // create a child session and execute the agent)
@@ -481,6 +488,50 @@ export class BackgroundManager {
         // Ignore callback errors
       }
     }
+
+    // Emit UI events for task status display
+    this.emitTaskUIEvents(task);
+  }
+
+  /**
+   * Emits UI events for task status updates.
+   */
+  private emitTaskUIEvents(task: BackgroundTask): void {
+    // Emit individual task update
+    coreEvents.emitBackgroundTaskUpdate({
+      taskId: task.id,
+      description: task.description,
+      agent: task.agent,
+      status: task.status,
+      resultPreview: task.result?.slice(0, 100),
+      error: task.error,
+    });
+
+    // Emit summary update
+    this.emitTasksSummary();
+  }
+
+  /**
+   * Emits the current tasks summary to the UI.
+   */
+  private emitTasksSummary(): void {
+    const activeTasks = this.getActiveTasks();
+    const stats = this.getStats();
+
+    coreEvents.emitBackgroundTasksSummary({
+      activeCount: activeTasks.length,
+      pendingCount: stats.tasks.pending,
+      runningCount: stats.tasks.running,
+      completedCount: stats.tasks.completed,
+      tasks: activeTasks.map((t) => ({
+        taskId: t.id,
+        description: t.description,
+        agent: t.agent,
+        status: t.status,
+        resultPreview: t.result?.slice(0, 100),
+        error: t.error,
+      })),
+    });
   }
 
   /**
@@ -604,9 +655,7 @@ export class BackgroundManager {
    * Gets the tool restrictions for an agent type.
    */
   getToolRestrictions(agent: string): AgentToolRestrictions {
-    const restrictions = (
-      DEFAULT_AGENT_RESTRICTIONS
-    )[agent];
+    const restrictions = DEFAULT_AGENT_RESTRICTIONS[agent];
     return (
       restrictions ?? {
         canSpawnTasks: false,

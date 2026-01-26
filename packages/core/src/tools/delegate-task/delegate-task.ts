@@ -11,6 +11,7 @@ import type { Config } from '../../config/config.js';
 import type { ToolResult, ToolInvocation } from '../tools.js';
 import { BaseDeclarativeTool, BaseToolInvocation, Kind } from '../tools.js';
 import { LocalAgentExecutor } from '../../agents/local-executor.js';
+import { getModelConfigAlias } from '../../agents/registry.js';
 import type { LocalAgentDefinition, AgentInputs } from '../../agents/types.js';
 import {
   DELEGATE_TASK_TOOL_NAME,
@@ -292,6 +293,9 @@ Continue the conversation. The user's new message is provided as the task input.
 
     agentDefinition.promptConfig.systemPrompt = systemPromptWithHistory;
 
+    // Register the model config so the executor can resolve the model
+    this.registerAgentModelConfig(agentDefinition);
+
     try {
       const executor = await LocalAgentExecutor.create(
         agentDefinition,
@@ -368,6 +372,17 @@ Continue the conversation. The user's new message is provided as the task input.
     };
   }
 
+  /**
+   * Registers the model config for a dynamically created agent definition.
+   * This is required so that the LocalAgentExecutor can resolve the model.
+   */
+  private registerAgentModelConfig(definition: LocalAgentDefinition): void {
+    const alias = getModelConfigAlias(definition);
+    this.config.modelConfigService.registerRuntimeModelConfig(alias, {
+      modelConfig: definition.modelConfig,
+    });
+  }
+
   private async executeSync(
     agentDefinition: LocalAgentDefinition,
     prompt: string,
@@ -378,6 +393,9 @@ Continue the conversation. The user's new message is provided as the task input.
 
     // Record the user message
     taskManager.addSessionMessage(sessionId, 'user', prompt);
+
+    // Register the model config so the executor can resolve the model
+    this.registerAgentModelConfig(agentDefinition);
 
     try {
       const executor = await LocalAgentExecutor.create(
@@ -426,6 +444,9 @@ Continue the conversation. The user's new message is provided as the task input.
 
     // Record the user message
     taskManager.addSessionMessage(sessionId, 'user', prompt);
+
+    // Register the model config so the executor can resolve the model
+    this.registerAgentModelConfig(agentDefinition);
 
     // Start the task asynchronously
     const taskPromise = (async (): Promise<DelegateTaskResult> => {

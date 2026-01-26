@@ -110,6 +110,50 @@ export interface RetryAttemptPayload {
   model: string;
 }
 
+/**
+ * Status of a background task for UI display.
+ */
+export type BackgroundTaskStatusType =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'error'
+  | 'cancelled';
+
+/**
+ * Payload for the 'background-task-update' event.
+ */
+export interface BackgroundTaskUpdatePayload {
+  /** Unique task identifier */
+  taskId: string;
+  /** Human-readable description */
+  description: string;
+  /** Agent type being used */
+  agent: string;
+  /** Current task status */
+  status: BackgroundTaskStatusType;
+  /** Result preview (if completed) */
+  resultPreview?: string;
+  /** Error message (if failed) */
+  error?: string;
+}
+
+/**
+ * Payload for background tasks summary event.
+ */
+export interface BackgroundTasksSummaryPayload {
+  /** Total number of active (pending + running) tasks */
+  activeCount: number;
+  /** Number of pending tasks */
+  pendingCount: number;
+  /** Number of running tasks */
+  runningCount: number;
+  /** Number of completed tasks (since last clear) */
+  completedCount: number;
+  /** List of active tasks */
+  tasks: BackgroundTaskUpdatePayload[];
+}
+
 export enum CoreEvent {
   UserFeedback = 'user-feedback',
   ModelChanged = 'model-changed',
@@ -125,6 +169,8 @@ export enum CoreEvent {
   AgentsRefreshed = 'agents-refreshed',
   AdminSettingsChanged = 'admin-settings-changed',
   RetryAttempt = 'retry-attempt',
+  BackgroundTaskUpdate = 'background-task-update',
+  BackgroundTasksSummary = 'background-tasks-summary',
 }
 
 export interface CoreEvents extends ExtensionEvents {
@@ -142,6 +188,8 @@ export interface CoreEvents extends ExtensionEvents {
   [CoreEvent.AgentsRefreshed]: never[];
   [CoreEvent.AdminSettingsChanged]: never[];
   [CoreEvent.RetryAttempt]: [RetryAttemptPayload];
+  [CoreEvent.BackgroundTaskUpdate]: [BackgroundTaskUpdatePayload];
+  [CoreEvent.BackgroundTasksSummary]: [BackgroundTasksSummaryPayload];
 }
 
 type EventBacklogItem = {
@@ -262,6 +310,20 @@ export class CoreEventEmitter extends EventEmitter<CoreEvents> {
    */
   emitRetryAttempt(payload: RetryAttemptPayload): void {
     this.emit(CoreEvent.RetryAttempt, payload);
+  }
+
+  /**
+   * Notifies subscribers of a background task status update.
+   */
+  emitBackgroundTaskUpdate(payload: BackgroundTaskUpdatePayload): void {
+    this._emitOrQueue(CoreEvent.BackgroundTaskUpdate, payload);
+  }
+
+  /**
+   * Notifies subscribers of the overall background tasks summary.
+   */
+  emitBackgroundTasksSummary(payload: BackgroundTasksSummaryPayload): void {
+    this._emitOrQueue(CoreEvent.BackgroundTasksSummary, payload);
   }
 
   /**

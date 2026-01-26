@@ -46,6 +46,7 @@ import { themeCommand } from '../ui/commands/themeCommand.js';
 import { toolsCommand } from '../ui/commands/toolsCommand.js';
 import { skillsCommand } from '../ui/commands/skillsCommand.js';
 import { settingsCommand } from '../ui/commands/settingsCommand.js';
+import { tasksCommand } from '../ui/commands/tasksCommand.js';
 import { ulwLoopCommand } from '../ui/commands/ulwLoopCommand.js';
 import { vimCommand } from '../ui/commands/vimCommand.js';
 import { setupGithubCommand } from '../ui/commands/setupGithubCommand.js';
@@ -140,6 +141,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
       restoreCommand(this.config),
       resumeCommand,
       statsCommand,
+      tasksCommand,
       themeCommand,
       toolsCommand,
       ulwLoopCommand,

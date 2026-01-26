@@ -54,3 +54,18 @@ priority = 50
 toolName = "SubagentInvocation"
 decision = "allow"
 priority = 50
+
+[[rule]]
+toolName = "delegate_task"
+decision = "allow"
+priority = 50
+
+[[rule]]
+toolName = "background_output"
+decision = "allow"
+priority = 50
+
+[[rule]]
+toolName = "background_cancel"
+decision = "allow"
+priority = 50

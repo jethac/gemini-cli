@@ -12,6 +12,10 @@ import type {
   SessionContext,
   SessionMessage,
 } from './types.js';
+import {
+  coreEvents,
+  type BackgroundTaskUpdatePayload,
+} from '../../utils/events.js';
 
 /**
  * Manages background tasks for delegate_task.
@@ -28,6 +32,21 @@ export class BackgroundTaskManager {
   private sessions: Map<string, SessionContext> = new Map();
 
   private constructor() {}
+
+  /**
+   * Emits a task update event for UI tracking.
+   */
+  private emitTaskUpdate(task: BackgroundTaskInfo): void {
+    const payload: BackgroundTaskUpdatePayload = {
+      taskId: task.task_id,
+      description: task.description,
+      agent: task.agent,
+      status: task.status as BackgroundTaskUpdatePayload['status'],
+      resultPreview: task.result?.slice(0, 100),
+      error: task.error,
+    };
+    coreEvents.emitBackgroundTaskUpdate(payload);
+  }
 
   static getInstance(): BackgroundTaskManager {
     if (!BackgroundTaskManager.instance) {
@@ -65,6 +84,7 @@ export class BackgroundTaskManager {
     this.tasks.set(taskId, taskInfo);
     this.abortControllers.set(taskId, new AbortController());
 
+    this.emitTaskUpdate(taskInfo);
     return taskInfo;
   }
 
@@ -75,6 +95,7 @@ export class BackgroundTaskManager {
     const task = this.tasks.get(taskId);
     if (task) {
       task.status = 'running';
+      this.emitTaskUpdate(task);
     }
   }
 
@@ -87,6 +108,7 @@ export class BackgroundTaskManager {
       task.status = 'completed';
       task.result = result;
       task.completed_at = new Date();
+      this.emitTaskUpdate(task);
     }
   }
 
@@ -99,6 +121,7 @@ export class BackgroundTaskManager {
       task.status = 'failed';
       task.error = error;
       task.completed_at = new Date();
+      this.emitTaskUpdate(task);
     }
   }
 
@@ -141,6 +164,7 @@ export class BackgroundTaskManager {
       controller.abort();
       task.status = 'cancelled';
       task.completed_at = new Date();
+      this.emitTaskUpdate(task);
       return true;
     }
 

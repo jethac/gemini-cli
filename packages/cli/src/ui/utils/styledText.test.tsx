@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { render } from 'ink-testing-library';
+import { render } from '../../test-utils/render.js';
 import { describe, it, expect } from 'vitest';
-import { act } from 'react';
 import { Text } from 'ink';
 import { renderStyledText } from './styledText.js';
 
@@ -32,7 +31,7 @@ describe('I18n Styled Text Solution', () => {
       'white',
     );
 
-    const { lastFrame } = await act(async () => render(component));
+    const { lastFrame } = render(component);
 
     const output = lastFrame();
 
@@ -143,12 +142,10 @@ describe('I18n Styled Text Solution', () => {
 
   describe('Regex Pattern Testing', () => {
     it('should correctly split text with single placeholder', async () => {
-      const { lastFrame } = await act(async () =>
-        render(
-          renderStyledText('Hello {name}!', {
-            name: <Text bold>World</Text>,
-          }),
-        ),
+      const { lastFrame } = render(
+        renderStyledText('Hello {name}!', {
+          name: <Text bold>World</Text>,
+        }),
       );
 
       expect(lastFrame()).toContain('Hello');
@@ -157,14 +154,12 @@ describe('I18n Styled Text Solution', () => {
     });
 
     it('should handle multiple placeholders correctly', async () => {
-      const { lastFrame } = await act(async () =>
-        render(
-          renderStyledText('{greeting} {name}, welcome to {place}!', {
-            greeting: <Text color="green">Hello</Text>,
-            name: <Text bold>Alice</Text>,
-            place: <Text color="blue">CLI</Text>,
-          }),
-        ),
+      const { lastFrame } = render(
+        renderStyledText('{greeting} {name}, welcome to {place}!', {
+          greeting: <Text color="green">Hello</Text>,
+          name: <Text bold>Alice</Text>,
+          place: <Text color="blue">CLI</Text>,
+        }),
       );
 
       const output = lastFrame();
@@ -175,14 +170,12 @@ describe('I18n Styled Text Solution', () => {
     });
 
     it('should handle consecutive placeholders', async () => {
-      const { lastFrame } = await act(async () =>
-        render(
-          renderStyledText('{first}{second}{third}', {
-            first: <Text>A</Text>,
-            second: <Text>B</Text>,
-            third: <Text>C</Text>,
-          }),
-        ),
+      const { lastFrame } = render(
+        renderStyledText('{first}{second}{third}', {
+          first: <Text>A</Text>,
+          second: <Text>B</Text>,
+          third: <Text>C</Text>,
+        }),
       );
 
       expect(lastFrame()).toContain('ABC');
@@ -190,13 +183,11 @@ describe('I18n Styled Text Solution', () => {
 
     it('should require all placeholders to have style mappings', async () => {
       // Now that we have error detection, all placeholders must have mappings
-      const { lastFrame } = await act(async () =>
-        render(
-          renderStyledText('Use {valid} and {provided}', {
-            valid: <Text bold>OK</Text>,
-            provided: <Text>Found</Text>,
-          }),
-        ),
+      const { lastFrame } = render(
+        renderStyledText('Use {valid} and {provided}', {
+          valid: <Text bold>OK</Text>,
+          provided: <Text>Found</Text>,
+        }),
       );
 
       const output = lastFrame();
@@ -205,12 +196,10 @@ describe('I18n Styled Text Solution', () => {
     });
 
     it('should handle empty placeholders', async () => {
-      const { lastFrame } = await act(async () =>
-        render(
-          renderStyledText('Test {} and {empty}', {
-            empty: <Text>Filled</Text>,
-          }),
-        ),
+      const { lastFrame } = render(
+        renderStyledText('Test {} and {empty}', {
+          empty: <Text>Filled</Text>,
+        }),
       );
 
       const output = lastFrame();
@@ -220,14 +209,12 @@ describe('I18n Styled Text Solution', () => {
     });
 
     it('should handle placeholders with special characters', async () => {
-      const { lastFrame } = await act(async () =>
-        render(
-          renderStyledText('Use {symbol-1} and {key_2} and {number3}', {
-            'symbol-1': <Text>Symbol</Text>,
-            key_2: <Text>Key</Text>,
-            number3: <Text>Number</Text>,
-          }),
-        ),
+      const { lastFrame } = render(
+        renderStyledText('Use {symbol-1} and {key_2} and {number3}', {
+          'symbol-1': <Text>Symbol</Text>,
+          key_2: <Text>Key</Text>,
+          number3: <Text>Number</Text>,
+        }),
       );
 
       const output = lastFrame();
@@ -237,12 +224,10 @@ describe('I18n Styled Text Solution', () => {
     });
 
     it('should handle nested braces correctly', async () => {
-      const { lastFrame } = await act(async () =>
-        render(
-          renderStyledText('Code: {code} with escaped braces', {
-            code: <Text bold>function() return true</Text>,
-          }),
-        ),
+      const { lastFrame } = render(
+        renderStyledText('Code: {code} with escaped braces', {
+          code: <Text bold>function() return true</Text>,
+        }),
       );
 
       const output = lastFrame();
@@ -251,20 +236,18 @@ describe('I18n Styled Text Solution', () => {
     });
 
     it('should handle text with no placeholders', async () => {
-      const { lastFrame } = await act(async () =>
-        render(renderStyledText('Plain text with no placeholders', {})),
+      const { lastFrame } = render(
+        renderStyledText('Plain text with no placeholders', {}),
       );
 
       expect(lastFrame()).toContain('Plain text with no placeholders');
     });
 
     it('should handle only placeholders with no surrounding text', async () => {
-      const { lastFrame } = await act(async () =>
-        render(
-          renderStyledText('{only}', {
-            only: <Text bold>Placeholder</Text>,
-          }),
-        ),
+      const { lastFrame } = render(
+        renderStyledText('{only}', {
+          only: <Text bold>Placeholder</Text>,
+        }),
       );
 
       expect(lastFrame()).toContain('Placeholder');
@@ -274,24 +257,22 @@ describe('I18n Styled Text Solution', () => {
       const complexText =
         'Shell mode: Execute {type} commands via {symbol} (e.g., {example}) or use {method} (e.g. {natural}).';
 
-      const { lastFrame } = await act(async () =>
-        render(
-          renderStyledText(complexText, {
-            type: <Text italic>shell</Text>,
-            symbol: (
-              <Text bold color="purple">
-                !
-              </Text>
-            ),
-            example: (
-              <Text bold color="purple">
-                !npm run start
-              </Text>
-            ),
-            method: <Text italic>natural language</Text>,
-            natural: <Text italic>start server</Text>,
-          }),
-        ),
+      const { lastFrame } = render(
+        renderStyledText(complexText, {
+          type: <Text italic>shell</Text>,
+          symbol: (
+            <Text bold color="purple">
+              !
+            </Text>
+          ),
+          example: (
+            <Text bold color="purple">
+              !npm run start
+            </Text>
+          ),
+          method: <Text italic>natural language</Text>,
+          natural: <Text italic>start server</Text>,
+        }),
       );
 
       const output = lastFrame();
@@ -308,12 +289,10 @@ describe('I18n Styled Text Solution', () => {
     it('should handle debugging - check exact split behavior', async () => {
       // This test helps us understand the regex split behavior
       const text = 'Test {missing} here';
-      const { lastFrame } = await act(async () =>
-        render(
-          renderStyledText(text, {
-            missing: <Text>REPLACED</Text>,
-          }),
-        ),
+      const { lastFrame } = render(
+        renderStyledText(text, {
+          missing: <Text>REPLACED</Text>,
+        }),
       );
 
       const output = lastFrame();

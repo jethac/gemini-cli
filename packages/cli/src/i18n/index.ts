@@ -9,8 +9,8 @@ import { initReactI18next } from 'react-i18next';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { Storage } from '@google/gemini-cli-core';
 
 // Get current directory in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -58,11 +58,9 @@ const namespaces = [
   'auth',
 ];
 const localesDir = path.join(__dirname, 'locales');
-const homeDir =
-  process.env['HOME'] ?? process.env['USERPROFILE'] ?? os.homedir();
 const userLocalesDir = process.env['GEMINI_SKIP_USER_LOCALES']
   ? path.join(__dirname, 'no-locales') // Use a non-existent path within the package
-  : path.join(homeDir, '.gemini', 'locales');
+  : path.join(Storage.getGlobalGeminiDir(), 'locales');
 
 interface LocaleManifest {
   displayName: string;
@@ -184,9 +182,7 @@ export function getLanguageOptions(): ReadonlyArray<{
  */
 function getSavedLanguagePreference(): string | null {
   try {
-    const homeDir =
-      process.env['HOME'] ?? process.env['USERPROFILE'] ?? os.homedir();
-    const settingsPath = path.join(homeDir, '.gemini', 'settings.json');
+    const settingsPath = Storage.getGlobalSettingsPath();
     const content = fsSync.readFileSync(settingsPath, 'utf8');
     const settings = JSON.parse(content) as Record<string, unknown>;
     const experimental = settings['experimental'] as
